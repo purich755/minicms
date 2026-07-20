@@ -1,9 +1,10 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { getCurrentTenant, NO_ACCESS } from '@/lib/auth'
+import { tags } from '@/lib/cache-tags'
 import { dbErrorMessage } from '@/lib/db-errors'
 import { MEDIA_BUCKET, storagePathFromUrl } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/server'
@@ -88,6 +89,9 @@ export async function savePromotion(_prev: FormState, formData: FormData): Promi
     if (error) return { ok: false, error: dbErrorMessage(error) }
   }
 
+  // updateTag сбрасывает кеш сразу, revalidateTag отдавал бы старое, пока
+  // обновляет в фоне — акция должна появляться на сайте немедленно.
+  updateTag(tags.promotions(tenant.id))
   revalidatePath('/admin/promotions')
   revalidatePath('/admin')
   redirect('/admin/promotions')
@@ -118,6 +122,9 @@ export async function deletePromotion(_prev: FormState, formData: FormData): Pro
 
   await dropImage(supabase, existing?.image_url)
 
+  // updateTag сбрасывает кеш сразу, revalidateTag отдавал бы старое, пока
+  // обновляет в фоне — акция должна появляться на сайте немедленно.
+  updateTag(tags.promotions(tenant.id))
   revalidatePath('/admin/promotions')
   revalidatePath('/admin')
   redirect('/admin/promotions')

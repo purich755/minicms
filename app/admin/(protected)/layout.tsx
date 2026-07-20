@@ -1,15 +1,37 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 
 import { signOut } from '@/app/admin/actions'
 import { SidebarNav } from '@/components/admin/sidebar-nav'
 import { getCurrentTenant, getCurrentUser } from '@/lib/auth'
 
-export default async function ProtectedAdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+/**
+ * Оболочка админки на время загрузки.
+ *
+ * Админка вся построена на данных запроса — сессии и тенанте, — поэтому
+ * статически отрисовать её содержимое нельзя. Отдаём каркас, чтобы страница
+ * не была пустой, пока проверяется сессия.
+ */
+function AdminSkeleton() {
+  return (
+    <div className="flex min-h-screen flex-col bg-[var(--surface)] md:flex-row">
+      <aside className="shrink-0 border-b border-[var(--border)] p-4 md:w-60 md:border-r md:border-b-0 md:p-5">
+        <div className="h-5 w-32 animate-pulse rounded bg-black/8" />
+        <div className="mt-6 flex flex-col gap-2">
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className="h-8 w-full animate-pulse rounded bg-black/6" />
+          ))}
+        </div>
+      </aside>
+      <main className="flex-1 p-4 md:p-8">
+        <div className="h-8 w-48 animate-pulse rounded bg-black/8" />
+      </main>
+    </div>
+  )
+}
+
+async function AdminShell({ children }: { children: React.ReactNode }) {
   // Обычно сюда не доходит — незалогиненных заворачивает proxy. Но проверка
   // на месте: если матчер proxy когда-нибудь изменят, страницы не должны
   // внезапно открыться всем подряд.
@@ -70,5 +92,16 @@ export default async function ProtectedAdminLayout({
 
       <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
     </div>
+  )
+}
+
+export default function ProtectedAdminLayout({ children }: { children: React.ReactNode }) {
+  // Функция намеренно не async: при включённом cacheComponents любое обращение
+  // к данным запроса обязано быть за <Suspense>, иначе сборка падает. Страницы
+  // внутри тоже читают сессию, и эта граница накрывает их заодно.
+  return (
+    <Suspense fallback={<AdminSkeleton />}>
+      <AdminShell>{children}</AdminShell>
+    </Suspense>
   )
 }

@@ -1,8 +1,9 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 
 import { getCurrentTenant, NO_ACCESS } from '@/lib/auth'
+import { tags } from '@/lib/cache-tags'
 import { dbErrorMessage } from '@/lib/db-errors'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -65,6 +66,13 @@ export async function saveSettings(_prev: FormState, formData: FormData): Promis
   if (error) {
     return { ok: false, error: dbErrorMessage(error) }
   }
+
+  // updateTag, а не revalidateTag: второй отдаёт устаревшее, пока обновляет
+  // в фоне, и владелец, открыв свой сайт сразу после сохранения, увидел бы
+  // старое. updateTag сбрасывает немедленно — это и есть «сохранил и видно».
+  updateTag(tags.settings(tenant.id))
+  // Название заведения живёт в tenants и попадает в шапку и в title.
+  updateTag(tags.tenant(tenant.slug))
 
   revalidatePath('/admin/settings')
   revalidatePath('/admin')

@@ -1,9 +1,10 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { getCurrentTenant, NO_ACCESS } from '@/lib/auth'
+import { tags } from '@/lib/cache-tags'
 import { dbErrorMessage } from '@/lib/db-errors'
 import { isValidSlug, slugify } from '@/lib/slug'
 import { MEDIA_BUCKET, storagePathFromUrl } from '@/lib/storage'
@@ -102,6 +103,9 @@ export async function saveNews(_prev: FormState, formData: FormData): Promise<Fo
     if (error) return { ok: false, error: dbErrorMessage(error, duplicateSlug) }
   }
 
+  // updateTag сбрасывает кеш сразу, revalidateTag отдавал бы старое, пока
+  // обновляет в фоне — новость должна появляться на сайте немедленно.
+  updateTag(tags.news(tenant.id))
   revalidatePath('/admin/news')
   revalidatePath('/admin')
   redirect('/admin/news')
@@ -129,6 +133,9 @@ export async function deleteNews(_prev: FormState, formData: FormData): Promise<
 
   await dropImage(supabase, existing?.cover_image_url)
 
+  // updateTag сбрасывает кеш сразу, revalidateTag отдавал бы старое, пока
+  // обновляет в фоне — новость должна появляться на сайте немедленно.
+  updateTag(tags.news(tenant.id))
   revalidatePath('/admin/news')
   revalidatePath('/admin')
   redirect('/admin/news')

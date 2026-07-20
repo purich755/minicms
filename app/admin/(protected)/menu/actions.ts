@@ -1,9 +1,10 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { getCurrentTenant, NO_ACCESS } from '@/lib/auth'
+import { tags } from '@/lib/cache-tags'
 import { dbErrorMessage } from '@/lib/db-errors'
 import { MEDIA_BUCKET, storagePathFromUrl } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/server'
@@ -25,7 +26,15 @@ async function dropImage(
   if (path) await supabase.storage.from(MEDIA_BUCKET).remove([path])
 }
 
-function refresh() {
+/**
+ * Сброс кеша после правки.
+ *
+ * updateTag, а не revalidateTag: второй отдаёт устаревшее, пока обновляет в
+ * фоне, и владелец, открыв свой сайт сразу после сохранения, увидел бы старое
+ * меню. updateTag сбрасывает немедленно.
+ */
+function refresh(tenantId: string) {
+  updateTag(tags.menu(tenantId))
   revalidatePath('/admin/menu')
   revalidatePath('/admin')
 }
@@ -60,7 +69,7 @@ export async function saveCategory(_prev: FormState, formData: FormData): Promis
 
   if (error) return { ok: false, error: dbErrorMessage(error) }
 
-  refresh()
+  refresh(tenant.id)
   redirect('/admin/menu')
 }
 
@@ -90,7 +99,7 @@ export async function deleteCategory(_prev: FormState, formData: FormData): Prom
     }
   }
 
-  refresh()
+  refresh(tenant.id)
   redirect('/admin/menu')
 }
 
@@ -166,7 +175,7 @@ export async function saveItem(_prev: FormState, formData: FormData): Promise<Fo
     if (error) return { ok: false, error: dbErrorMessage(error, foreignCategory) }
   }
 
-  refresh()
+  refresh(tenant.id)
   redirect('/admin/menu')
 }
 
@@ -195,6 +204,6 @@ export async function deleteItem(_prev: FormState, formData: FormData): Promise<
 
   await dropImage(supabase, existing?.image_url)
 
-  refresh()
+  refresh(tenant.id)
   redirect('/admin/menu')
 }

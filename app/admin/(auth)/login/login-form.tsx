@@ -6,12 +6,18 @@ import { signIn, type LoginState } from '@/app/admin/actions'
 
 const initialState: LoginState = { error: null }
 
-export function LoginForm({ next }: { next?: string }) {
+/**
+ * @param children — сюда страница подставляет скрытое поле с адресом возврата.
+ * Оно приходит из searchParams, то есть из данных запроса, и при включённом
+ * cacheComponents такие данные обязаны быть за <Suspense>. Пропускаем их
+ * через children, чтобы сама форма осталась статической.
+ */
+export function LoginForm({ children }: { children?: React.ReactNode }) {
   const [state, formAction, pending] = useActionState(signIn, initialState)
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      {next ? <input type="hidden" name="next" value={next} /> : null}
+      {children}
 
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Почта</span>

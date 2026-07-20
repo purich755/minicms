@@ -21,12 +21,22 @@ import { supabaseAnonKey, supabaseUrl } from './env'
  * Никогда не используй этот клиент в админке — он не увидит черновики
  * и не даст ничего записать. Там нужен createClient() из ./server.
  */
+/** Сколько ждать ответа базы, прежде чем сдаться. */
+const TIMEOUT_MS = 5000
+
 export function createPublicClient() {
   return createSupabaseClient<Database>(supabaseUrl(), supabaseAnonKey(), {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+    },
+    global: {
+      // Без таймаута недоступная база означает не ошибку, а бесконечное
+      // ожидание: supabase-js молча ретраит, и посетитель смотрит на пустую
+      // вкладку десятки секунд. Лучше быстро отдать ошибку.
+      fetch: (input, init) =>
+        fetch(input, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) }),
     },
   })
 }

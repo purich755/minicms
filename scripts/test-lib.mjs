@@ -7,7 +7,9 @@
  * тестами не покрыта — её проверяют руками на живом проекте.
  */
 
+import { allContentTags, tags } from '../lib/cache-tags.ts'
 import { formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
+import { isLocalHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
 import { isValidSlug, slugify } from '../lib/slug.ts'
 import { buildMediaPath, storagePathFromUrl, validateImage } from '../lib/storage.ts'
 import {
@@ -216,6 +218,38 @@ check('ссылка→путь: другой бакет — не наш',
   storagePathFromUrl('https://abc.supabase.co/storage/v1/object/public/other/t1/a.jpg'), null)
 check('ссылка→путь: пусто', storagePathFromUrl(null), null)
 check('ссылка→путь: пустая строка', storagePathFromUrl(''), null)
+
+// ----------------------------------------------------------------- домены
+check('хост: порт отрезается', normalizeHost('Flora.RF:3000'), 'flora.rf')
+check('хост: регистр приводится', normalizeHost('FLORA.example.RU'), 'flora.example.ru')
+check('хост: пусто', normalizeHost(null), '')
+
+check('поддомен: обычный', subdomainSlug('flora.example.ru', 'example.ru'), 'flora')
+check('поддомен: с портом', subdomainSlug('flora.example.ru:3000', 'example.ru'), 'flora')
+check('поддомен: сам корневой домен — не тенант', subdomainSlug('example.ru', 'example.ru'), null)
+check('поддомен: www зарезервирован', subdomainSlug('www.example.ru', 'example.ru'), null)
+check('поддомен: admin зарезервирован', subdomainSlug('admin.example.ru', 'example.ru'), null)
+check('поддомен: чужой домен — не наш поддомен',
+  subdomainSlug('flora-cafe.ru', 'example.ru'), null)
+check('поддомен: вложенный не считается',
+  subdomainSlug('a.b.example.ru', 'example.ru'), null)
+check('поддомен: похожий домен не проходит',
+  subdomainSlug('notexample.ru', 'example.ru'), null)
+check('поддомен: слаг обязан начинаться с буквы',
+  subdomainSlug('1flora.example.ru', 'example.ru'), null)
+check('поддомен: без корневого домена ничего не резолвится',
+  subdomainSlug('flora.example.ru', ''), null)
+
+check('localhost опознаётся', isLocalHost('localhost:3200'), true)
+check('127.0.0.1 опознаётся', isLocalHost('127.0.0.1'), true)
+check('обычный домен — не localhost', isLocalHost('example.ru'), false)
+
+// ------------------------------------------------------------- теги кеша
+check('тег тенанта', tags.tenant('flora'), 'tenant:flora')
+check('тег меню', tags.menu('t1'), 'menu:t1')
+check('теги контента: все четыре', allContentTags('t1').length, 4)
+check('теги контента: без пересечений', new Set(allContentTags('t1')).size, 4)
+check('теги разных тенантов не совпадают', tags.menu('a') === tags.menu('b'), false)
 
 // ---------------------------------------------------------------- итог
 if (failures.length === 0) {
