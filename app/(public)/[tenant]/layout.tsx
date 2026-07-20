@@ -26,6 +26,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
       description: settings?.about ?? undefined,
       images: settings?.logo_url ? [settings.logo_url] : undefined,
       type: 'website',
+      locale: 'ru_RU',
     },
   }
 }
@@ -35,13 +36,19 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
  * Поэтому отдаём его отдельным <style>, а не инлайном на обёртке — иначе
  * обёртка стала бы динамической и утащила за собой всю страницу.
  *
+ * Заодно считаем приглушённый вариант через color-mix: для подложек и
+ * ховеров нужен тот же оттенок, но тише, а второй цвет в палитре завести
+ * нельзя — он у каждого заведения свой.
+ *
  * Значение прогоняем через регулярку, хотя в базе на него есть check-ограничение:
  * это строка, которая попадает прямо в CSS, и полагаться на одну проверку тут
  * не стоит.
  */
 function BrandColor({ color }: { color: string | undefined }) {
-  const safe = color && /^#[0-9a-f]{6}$/i.test(color) ? color : '#111827'
-  return <style>{`:root{--brand:${safe}}`}</style>
+  const safe = color && /^#[0-9a-f]{6}$/i.test(color) ? color : '#1c1917'
+  return (
+    <style>{`:root{--brand:${safe};--brand-wash:color-mix(in oklab,${safe} 8%,transparent);--brand-line:color-mix(in oklab,${safe} 22%,transparent)}`}</style>
+  )
 }
 
 async function Header({ params }: { params: Params }) {
@@ -67,8 +74,12 @@ async function Footer({ params }: { params: Params }) {
   const tenant = await resolveTenant(slug)
   if (!tenant) return null
 
-  const settings = await getSiteSettings(tenant.id)
-  return <SiteFooter tenant={tenant} settings={settings} />
+  const [settings, basePath] = await Promise.all([
+    getSiteSettings(tenant.id),
+    getBasePath(tenant.slug),
+  ])
+
+  return <SiteFooter tenant={tenant} settings={settings} basePath={basePath} />
 }
 
 export default function PublicSiteLayout({
@@ -82,14 +93,20 @@ export default function PublicSiteLayout({
   // лейаут дождётся данных запроса, статическая оболочка перестанет
   // существовать и вся страница будет ждать базу.
   return (
-    <div className="flex min-h-screen flex-col bg-white text-neutral-900">
-      <header className="border-b border-black/8">
+    <div className="grain flex min-h-screen flex-col bg-paper text-stone-900">
+      <a href="#content" className="skip-link">
+        К содержимому
+      </a>
+
+      <header className="sticky top-0 z-20 border-b border-hairline bg-paper/85 backdrop-blur-md">
         <Suspense fallback={<HeaderSkeleton />}>
           <Header params={params} />
         </Suspense>
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main id="content" className="flex-1">
+        {children}
+      </main>
 
       <Suspense fallback={null}>
         <Footer params={params} />

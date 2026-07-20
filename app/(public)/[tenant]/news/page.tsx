@@ -3,9 +3,9 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
 import { PageSkeleton } from '@/components/public/skeletons'
+import { getBasePath } from '@/lib/base-path'
 import { formatDate } from '@/lib/format'
 import { getNewsList } from '@/lib/public-data'
-import { getBasePath } from '@/lib/base-path'
 import { resolveTenant } from '@/lib/tenant'
 
 export const metadata = { title: 'Новости' }
@@ -31,35 +31,42 @@ async function NewsContent({ params }: { params: Params }) {
   const [news, base] = await Promise.all([getNewsList(tenant.id), getBasePath(tenant.slug)])
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-12">
-      <h1 className="text-3xl font-semibold">Новости</h1>
+    <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-20">
+      <h1 className="display text-[clamp(2.5rem,7vw,4rem)]">Новости</h1>
 
       {news.length === 0 ? (
-        <p className="mt-6 opacity-70">Пока новостей нет.</p>
+        <p className="mt-8 text-stone-600">Пока новостей нет.</p>
       ) : (
-        <div className="mt-10 flex flex-col gap-8">
+        <div className="mt-12 divide-y divide-hairline">
           {news.map((item) => (
-            <article key={item.id} className="flex gap-5 border-b border-black/8 pb-8">
-              {item.cover_image_url ? (
-                /* eslint-disable-next-line @next/next/no-img-element -- обложка
-                   произвольного размера из Storage */
-                <img
-                  src={item.cover_image_url}
-                  alt=""
-                  className="size-28 shrink-0 rounded-xl object-cover"
-                />
-              ) : null}
-
-              <div className="min-w-0">
-                <h2 className="text-lg font-medium">
-                  <Link href={`${base}/news/${item.slug}`} className="hover:underline">
-                    {item.title}
-                  </Link>
-                </h2>
-                {item.published_at ? (
-                  <p className="mt-1 text-sm opacity-60">{formatDate(item.published_at)}</p>
+            <article key={item.id}>
+              {/* Вся карточка — одна ссылка: попасть в неё легче, чем в
+                  заголовок, особенно пальцем на телефоне. */}
+              <Link href={`${base}/news/${item.slug}`} className="group flex gap-6 py-7">
+                {item.cover_image_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- обложка
+                     произвольного размера из Storage */
+                  <img
+                    src={item.cover_image_url}
+                    alt=""
+                    className="size-28 shrink-0 rounded-xl object-cover sm:size-36"
+                  />
                 ) : null}
-              </div>
+
+                <div className="min-w-0 flex-1">
+                  {item.published_at ? (
+                    <p className="text-xs tracking-[0.14em] text-stone-500 uppercase">
+                      {formatDate(item.published_at)}
+                    </p>
+                  ) : null}
+                  <h2 className="display mt-2 text-xl transition-colors group-hover:text-brand sm:text-2xl">
+                    {item.title}
+                  </h2>
+                  <span className="mt-3 inline-block text-sm text-stone-500 transition-transform duration-200 group-hover:translate-x-1">
+                    Читать →
+                  </span>
+                </div>
+              </Link>
             </article>
           ))}
         </div>

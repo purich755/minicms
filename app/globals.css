@@ -1,14 +1,25 @@
 @import "tailwindcss";
 
 :root {
+  /* --- Админка: нейтральная, рабочая --- */
   --background: #ffffff;
   --foreground: #171717;
-  /* Приглушённый серый фон админки, чтобы белые карточки читались как карточки */
   --surface: #f6f7f9;
   --border: #e4e7ec;
   --muted: #6b7280;
   --accent: #1f6feb;
   --danger: #b42318;
+
+  /* --- Публичные сайты: тёплая бумажная база ---
+     Чистый #fff при коричневом фирменном цвете выглядит стерильно.
+     Серые берём из тёплого семейства (stone), а не из чёрного:
+     смешивать тёплые и холодные оттенки в одной палитре нельзя. */
+  --paper: #faf8f5;
+  --hairline: color-mix(in oklab, #1c1917 10%, transparent);
+
+  /* Фирменный цвет заведения. Значение подставляет лейаут из настроек
+     тенанта; здесь — запасное на время загрузки. */
+  --brand: #1c1917;
 }
 
 @theme inline {
@@ -19,11 +30,61 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-danger: var(--danger);
-  --font-sans: var(--font-inter);
+  --color-paper: var(--paper);
+  --color-hairline: var(--hairline);
+  --color-brand: var(--brand);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+/* Крупные заголовки: плотнее по трекингу и по высоте строки, иначе засечный
+   шрифт в больших кеглях расползается. */
+.display {
+  font-family: var(--font-heading), Georgia, serif;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+/* Ссылка «к содержимому» для клавиатуры: не видна, пока не получит фокус. */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -100%;
+  z-index: 50;
+  border-radius: 0.5rem;
+  background: var(--brand);
+  padding: 0.625rem 1rem;
+  color: #fff;
+  transition: top 150ms ease;
+}
+.skip-link:focus {
+  top: 0.75rem;
+}
+
+/* Тонкая зернистость поверх страницы: убирает цифровую плоскость, но не
+   мешает кликам. Один SVG-шум вместо картинки — ничего не грузится. */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

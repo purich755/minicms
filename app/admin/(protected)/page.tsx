@@ -54,9 +54,10 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-8 rounded-xl border border-[var(--border)] bg-white p-5">
-        <h2 className="font-medium">Публичный адрес</h2>
+        <h2 className="font-medium">Адрес сайта</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Пока сайт открывается по внутреннему адресу. Свой домен подключается в Фазе 5.
+          По этой ссылке заведение видят посетители. Хотите свой домен — напишите нам,
+          подключим.
         </p>
         <Link
           href={`/${tenant?.slug}`}

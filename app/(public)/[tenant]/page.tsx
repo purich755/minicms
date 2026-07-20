@@ -3,9 +3,15 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
 import { HomeSkeleton } from '@/components/public/skeletons'
-import { formatDate, formatPrice } from '@/lib/format'
-import { getActivePromotions, getMenu, getNewsList, getSiteSettings } from '@/lib/public-data'
 import { getBasePath } from '@/lib/base-path'
+import { formatDate, formatPrice } from '@/lib/format'
+import {
+  getActivePromotions,
+  getMenu,
+  getNewsList,
+  getSiteSettings,
+  type Promotion,
+} from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
 
 type Params = Promise<{ tenant: string }>
@@ -20,6 +26,62 @@ export default function TenantHomePage({ params }: { params: Params }) {
   )
 }
 
+function SectionTitle({ children, href }: { children: string; href?: string }) {
+  return (
+    <div className="mb-8 flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
+      <h2 className="display text-2xl sm:text-3xl">{children}</h2>
+      {href ? (
+        <Link
+          href={href}
+          className="shrink-0 text-sm text-stone-600 underline decoration-stone-300 underline-offset-4 transition-colors hover:text-stone-900 hover:decoration-stone-900"
+        >
+          Смотреть все
+        </Link>
+      ) : null}
+    </div>
+  )
+}
+
+/** Крупная карточка первой акции: она и есть главное предложение. */
+function LeadPromo({ promo }: { promo: Promotion }) {
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-2xl bg-[var(--brand-wash)] ring-1 ring-[var(--brand-line)]">
+      {promo.image_url ? (
+        /* eslint-disable-next-line @next/next/no-img-element -- картинка
+           произвольного размера из Storage */
+        <img
+          src={promo.image_url}
+          alt={promo.title}
+          className="h-56 w-full object-cover sm:h-64"
+        />
+      ) : null}
+      <div className="flex flex-1 flex-col p-7">
+        <h3 className="display text-2xl">{promo.title}</h3>
+        {promo.description ? (
+          <p className="mt-3 max-w-prose text-stone-700">{promo.description}</p>
+        ) : null}
+        {promo.ends_at ? (
+          <p className="mt-auto pt-5 text-sm text-stone-500">до {formatDate(promo.ends_at)}</p>
+        ) : null}
+      </div>
+    </article>
+  )
+}
+
+function SidePromo({ promo }: { promo: Promotion }) {
+  return (
+    <article className="rounded-xl border border-hairline p-5 transition-colors hover:border-[var(--brand-line)]">
+      <h3 className="font-semibold">{promo.title}</h3>
+      {promo.description ? (
+        <p className="mt-1.5 text-sm text-stone-600">{promo.description}</p>
+      ) : null}
+      {promo.ends_at ? (
+        <p className="mt-3 text-xs text-stone-500">до {formatDate(promo.ends_at)}</p>
+      ) : null}
+    </article>
+  )
+}
+
 async function HomeContent({ params }: { params: Params }) {
   const { tenant: slug } = await params
 
@@ -30,108 +92,90 @@ async function HomeContent({ params }: { params: Params }) {
     getSiteSettings(tenant.id),
     getActivePromotions(tenant.id),
     getMenu(tenant.id),
-    getNewsList(tenant.id, 3),
+    getNewsList(tenant.id, 4),
     getBasePath(tenant.slug),
   ])
+
+  const [leadPromo, ...restPromos] = promotions
   const previewItems = menu.items.slice(0, 6)
+  const [leadNews, ...restNews] = news
 
   return (
     <>
-      <section className="mx-auto max-w-5xl px-5 py-16 sm:py-24">
-        <h1 className="text-4xl font-semibold sm:text-5xl">{tenant.name}</h1>
+      {/* Герой. Заголовок уходит за пределы колонки текста — так он читается
+          как вывеска, а не как ещё один абзац. */}
+      <section className="mx-auto max-w-5xl px-5 pt-16 pb-20 sm:px-8 sm:pt-24 sm:pb-28">
+        <p className="text-xs tracking-[0.18em] text-stone-500 uppercase">
+          {settings?.address ?? 'Заведение'}
+        </p>
+
+        <h1 className="display mt-5 text-[clamp(2.75rem,9vw,5.5rem)]">{tenant.name}</h1>
+
         {settings?.about ? (
-          <p className="mt-4 max-w-2xl text-lg opacity-70">{settings.about}</p>
+          <p className="mt-7 max-w-xl text-lg leading-relaxed text-stone-700 text-pretty">
+            {settings.about}
+          </p>
         ) : null}
 
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="mt-10 flex flex-wrap items-center gap-3">
           <Link
             href={`${base}/menu`}
-            className="rounded-lg px-5 py-3 font-medium text-white transition hover:opacity-90"
-            style={{ background: 'var(--brand)' }}
+            className="rounded-xl bg-brand px-6 py-3.5 font-medium text-white transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
           >
             Смотреть меню
           </Link>
           {settings?.phone ? (
             <a
               href={`tel:${settings.phone.replace(/[^+\d]/g, '')}`}
-              className="rounded-lg border border-black/12 px-5 py-3 font-medium transition hover:bg-black/4"
+              className="rounded-xl border border-[var(--brand-line)] px-6 py-3.5 font-medium tabular-nums transition-colors hover:bg-[var(--brand-wash)]"
             >
-              Позвонить
+              {settings.phone}
             </a>
           ) : null}
         </div>
 
-        {settings?.working_hours || settings?.address ? (
-          <dl className="mt-10 flex flex-wrap gap-x-10 gap-y-3 text-sm">
-            {settings?.working_hours ? (
-              <div>
-                <dt className="opacity-60">Часы работы</dt>
-                <dd className="mt-0.5 font-medium">{settings.working_hours}</dd>
-              </div>
-            ) : null}
-            {settings?.address ? (
-              <div>
-                <dt className="opacity-60">Адрес</dt>
-                <dd className="mt-0.5 font-medium">{settings.address}</dd>
-              </div>
-            ) : null}
-          </dl>
+        {settings?.working_hours ? (
+          <p className="mt-8 text-sm text-stone-600">
+            <span className="text-stone-400">Работаем</span> {settings.working_hours}
+          </p>
         ) : null}
       </section>
 
-      {promotions.length > 0 ? (
-        <section className="mx-auto max-w-5xl px-5 py-10">
-          <h2 className="text-2xl font-semibold">Сейчас действует</h2>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {promotions.map((promo) => (
-              <article
-                key={promo.id}
-                className="overflow-hidden rounded-2xl border border-black/8"
-              >
-                {promo.image_url ? (
-                  /* eslint-disable-next-line @next/next/no-img-element -- картинка
-                     произвольного размера из Storage */
-                  <img
-                    src={promo.image_url}
-                    alt=""
-                    className="h-40 w-full object-cover"
-                  />
-                ) : null}
-                <div className="p-5">
-                  <h3 className="font-medium">{promo.title}</h3>
-                  {promo.description ? (
-                    <p className="mt-1.5 text-sm opacity-70">{promo.description}</p>
-                  ) : null}
-                  {promo.ends_at ? (
-                    <p className="mt-3 text-xs opacity-60">до {formatDate(promo.ends_at)}</p>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+      {leadPromo ? (
+        <section className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
+          <SectionTitle>Сейчас действует</SectionTitle>
+
+          {/* Не три равные колонки: первое предложение крупное, остальные —
+              компактным столбцом рядом. */}
+          <div className="grid gap-6 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <LeadPromo promo={leadPromo} />
+            </div>
+            {restPromos.length > 0 ? (
+              <div className="flex flex-col gap-4 lg:col-span-5">
+                {restPromos.map((promo) => (
+                  <SidePromo key={promo.id} promo={promo} />
+                ))}
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
 
       {previewItems.length > 0 ? (
-        <section className="mx-auto max-w-5xl px-5 py-10">
-          <div className="flex items-end justify-between gap-4">
-            <h2 className="text-2xl font-semibold">Из меню</h2>
-            <Link
-              href={`${base}/menu`}
-              className="text-sm underline underline-offset-2 opacity-70 hover:opacity-100"
-            >
-              Всё меню
-            </Link>
-          </div>
+        <section className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
+          <SectionTitle href={`${base}/menu`}>Из меню</SectionTitle>
 
-          <ul className="mt-6 grid gap-x-10 gap-y-4 sm:grid-cols-2">
+          {/* Отточие между названием и ценой — как в печатном меню. */}
+          <ul className="grid gap-x-14 gap-y-5 sm:grid-cols-2">
             {previewItems.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-baseline justify-between gap-4 border-b border-dashed border-black/12 pb-3"
-              >
-                <span>{item.name}</span>
-                <span className="shrink-0 tabular-nums opacity-70">
+              <li key={item.id} className="flex items-baseline gap-3">
+                <span className="shrink-0">{item.name}</span>
+                <span
+                  aria-hidden
+                  className="min-w-6 flex-1 translate-y-[-0.3em] border-b border-dotted border-stone-300"
+                />
+                <span className="shrink-0 tabular-nums text-stone-600">
                   {formatPrice(item.price)}
                 </span>
               </li>
@@ -140,40 +184,54 @@ async function HomeContent({ params }: { params: Params }) {
         </section>
       ) : null}
 
-      {news.length > 0 ? (
-        <section className="mx-auto max-w-5xl px-5 py-10">
-          <div className="flex items-end justify-between gap-4">
-            <h2 className="text-2xl font-semibold">Новости</h2>
-            <Link
-              href={`${base}/news`}
-              className="text-sm underline underline-offset-2 opacity-70 hover:opacity-100"
-            >
-              Все новости
-            </Link>
-          </div>
+      {leadNews ? (
+        <section className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
+          <SectionTitle href={`${base}/news`}>Новости</SectionTitle>
 
-          <div className="mt-6 grid gap-5 sm:grid-cols-3">
-            {news.map((item) => (
-              <Link
-                key={item.id}
-                href={`${base}/news/${item.slug}`}
-                className="group block"
-              >
-                {item.cover_image_url ? (
+          <div className="grid gap-10 lg:grid-cols-12">
+            <article className="lg:col-span-7">
+              <Link href={`${base}/news/${leadNews.slug}`} className="group block">
+                {leadNews.cover_image_url ? (
                   /* eslint-disable-next-line @next/next/no-img-element -- обложка
                      произвольного размера из Storage */
                   <img
-                    src={item.cover_image_url}
+                    src={leadNews.cover_image_url}
                     alt=""
-                    className="mb-3 h-36 w-full rounded-xl object-cover"
+                    className="mb-5 h-64 w-full rounded-2xl object-cover transition-transform duration-300 group-hover:scale-[1.01]"
                   />
                 ) : null}
-                <h3 className="font-medium group-hover:underline">{item.title}</h3>
-                {item.published_at ? (
-                  <p className="mt-1 text-xs opacity-60">{formatDate(item.published_at)}</p>
+                <h3 className="display text-2xl transition-colors group-hover:text-brand">
+                  {leadNews.title}
+                </h3>
+                {leadNews.published_at ? (
+                  <p className="mt-2 text-sm text-stone-500">
+                    {formatDate(leadNews.published_at)}
+                  </p>
                 ) : null}
               </Link>
-            ))}
+            </article>
+
+            {restNews.length > 0 ? (
+              <ul className="flex flex-col divide-y divide-hairline lg:col-span-5">
+                {restNews.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      href={`${base}/news/${item.slug}`}
+                      className="group block py-4 first:pt-0"
+                    >
+                      <h3 className="font-medium transition-colors group-hover:text-brand">
+                        {item.title}
+                      </h3>
+                      {item.published_at ? (
+                        <p className="mt-1 text-sm text-stone-500">
+                          {formatDate(item.published_at)}
+                        </p>
+                      ) : null}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </section>
       ) : null}

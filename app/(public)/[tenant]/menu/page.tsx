@@ -20,29 +20,55 @@ export default function MenuPage({ params }: { params: Params }) {
   )
 }
 
-function ItemCard({ item }: { item: MenuItem }) {
+function Item({ item }: { item: MenuItem }) {
   return (
-    <li className="flex gap-4 border-b border-dashed border-black/12 pb-4">
+    <li className="flex gap-5 py-5">
       {item.image_url ? (
         /* eslint-disable-next-line @next/next/no-img-element -- фото произвольного
            размера из Storage */
         <img
           src={item.image_url}
-          alt=""
-          className="size-20 shrink-0 rounded-xl object-cover"
+          alt={item.name}
+          className="size-20 shrink-0 rounded-xl object-cover sm:size-24"
         />
       ) : null}
 
-      <div className="flex min-w-0 flex-1 items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-medium">{item.name}</p>
-          {item.description ? (
-            <p className="mt-1 text-sm opacity-70">{item.description}</p>
-          ) : null}
+      <div className="min-w-0 flex-1">
+        {/* Название и цена связаны отточием — как в печатном меню, где взгляд
+            должен доходить от блюда до цены без сползания на соседнюю строку. */}
+        <div className="flex items-baseline gap-3">
+          <h3 className="shrink-0 font-medium">{item.name}</h3>
+          <span
+            aria-hidden
+            className="min-w-6 flex-1 translate-y-[-0.3em] border-b border-dotted border-stone-300"
+          />
+          <span className="shrink-0 tabular-nums">{formatPrice(item.price)}</span>
         </div>
-        <span className="shrink-0 tabular-nums">{formatPrice(item.price)}</span>
+
+        {item.description ? (
+          <p className="mt-1.5 max-w-prose text-sm text-stone-600">{item.description}</p>
+        ) : null}
       </div>
     </li>
+  )
+}
+
+function Category({ name, items }: { name: string; items: MenuItem[] }) {
+  if (items.length === 0) return null
+
+  return (
+    <section>
+      {/* Заголовок категории липнет к верху при прокрутке: в длинном меню
+          посетитель всегда видит, в каком он разделе. */}
+      <h2 className="display sticky top-[4.25rem] z-10 -mx-5 bg-paper/90 px-5 py-3 text-xl text-brand backdrop-blur-sm sm:-mx-8 sm:px-8">
+        {name}
+      </h2>
+      <ul className="divide-y divide-hairline">
+        {items.map((item) => (
+          <Item key={item.id} item={item} />
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -56,46 +82,22 @@ async function MenuContent({ params }: { params: Params }) {
   const uncategorized = items.filter((item) => item.category_id === null)
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-12">
-      <h1 className="text-3xl font-semibold">Меню</h1>
+    <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-20">
+      <h1 className="display text-[clamp(2.5rem,7vw,4rem)]">Меню</h1>
 
       {items.length === 0 ? (
-        <p className="mt-6 opacity-70">Меню скоро появится.</p>
+        <p className="mt-8 text-stone-600">Меню скоро появится.</p>
       ) : (
-        <div className="mt-10 flex flex-col gap-12">
-          {categories.map((category) => {
-            const categoryItems = items.filter((item) => item.category_id === category.id)
-            if (categoryItems.length === 0) return null
+        <div className="mt-12 flex flex-col gap-14">
+          {categories.map((category) => (
+            <Category
+              key={category.id}
+              name={category.name}
+              items={items.filter((item) => item.category_id === category.id)}
+            />
+          ))}
 
-            return (
-              <section key={category.id}>
-                <h2
-                  className="text-xl font-semibold"
-                  style={{ color: 'var(--brand)' }}
-                >
-                  {category.name}
-                </h2>
-                <ul className="mt-5 flex flex-col gap-4">
-                  {categoryItems.map((item) => (
-                    <ItemCard key={item.id} item={item} />
-                  ))}
-                </ul>
-              </section>
-            )
-          })}
-
-          {uncategorized.length > 0 ? (
-            <section>
-              <h2 className="text-xl font-semibold" style={{ color: 'var(--brand)' }}>
-                Ещё
-              </h2>
-              <ul className="mt-5 flex flex-col gap-4">
-                {uncategorized.map((item) => (
-                  <ItemCard key={item.id} item={item} />
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          {uncategorized.length > 0 ? <Category name="Ещё" items={uncategorized} /> : null}
         </div>
       )}
     </div>

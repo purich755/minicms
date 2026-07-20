@@ -4,9 +4,9 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
 import { PageSkeleton } from '@/components/public/skeletons'
+import { getBasePath } from '@/lib/base-path'
 import { formatDate } from '@/lib/format'
 import { getNewsItem } from '@/lib/public-data'
-import { getBasePath } from '@/lib/base-path'
 import { resolveTenant } from '@/lib/tenant'
 
 type Params = { tenant: string; slug: string }
@@ -33,6 +33,7 @@ export async function generateMetadata({
       images: item.cover_image_url ? [item.cover_image_url] : undefined,
       type: 'article',
       publishedTime: item.published_at ?? undefined,
+      locale: 'ru_RU',
     },
   }
 }
@@ -62,18 +63,23 @@ async function NewsItemContent({ params }: { params: Promise<Params> }) {
   if (!item) notFound()
 
   return (
-    <article className="mx-auto max-w-2xl px-5 py-12">
+    <article className="mx-auto max-w-2xl px-5 py-16 sm:px-8 sm:py-20">
       <Link
         href={`${base}/news`}
-        className="text-sm underline underline-offset-2 opacity-60 hover:opacity-100"
+        className="group inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-stone-900"
       >
-        ← Все новости
+        <span className="transition-transform duration-200 group-hover:-translate-x-1">←</span>
+        Все новости
       </Link>
 
-      <h1 className="mt-6 text-3xl font-semibold">{item.title}</h1>
-      {item.published_at ? (
-        <p className="mt-2 text-sm opacity-60">{formatDate(item.published_at)}</p>
-      ) : null}
+      <header className="mt-8">
+        {item.published_at ? (
+          <p className="text-xs tracking-[0.14em] text-stone-500 uppercase">
+            {formatDate(item.published_at)}
+          </p>
+        ) : null}
+        <h1 className="display mt-3 text-[clamp(2rem,6vw,3.25rem)]">{item.title}</h1>
+      </header>
 
       {item.cover_image_url ? (
         /* eslint-disable-next-line @next/next/no-img-element -- обложка
@@ -81,12 +87,13 @@ async function NewsItemContent({ params }: { params: Promise<Params> }) {
         <img
           src={item.cover_image_url}
           alt=""
-          className="mt-8 w-full rounded-2xl object-cover"
+          className="mt-10 w-full rounded-2xl object-cover"
         />
       ) : null}
 
       {item.body ? (
-        <div className="mt-8 flex flex-col gap-4 leading-relaxed">
+        // Ширина колонки ограничена: длинную строку глаз теряет при переносе.
+        <div className="mt-10 flex max-w-prose flex-col gap-5 text-lg leading-relaxed text-stone-800">
           {/* Текст вводят обычным полем, без разметки: разбиваем по пустым
               строкам на абзацы. Никакого dangerouslySetInnerHTML — иначе
               владелец сайта смог бы вставить скрипт себе на страницу. */}
@@ -95,10 +102,21 @@ async function NewsItemContent({ params }: { params: Promise<Params> }) {
             .map((paragraph) => paragraph.trim())
             .filter(Boolean)
             .map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
+              <p key={index} className="text-pretty">
+                {paragraph}
+              </p>
             ))}
         </div>
       ) : null}
+
+      <footer className="mt-14 border-t border-hairline pt-6">
+        <Link
+          href={`${base}/menu`}
+          className="text-sm text-stone-600 underline decoration-stone-300 underline-offset-4 transition-colors hover:text-stone-900 hover:decoration-stone-900"
+        >
+          Посмотреть меню
+        </Link>
+      </footer>
     </article>
   )
 }
