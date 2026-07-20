@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Мини-CMS для сайтов локального бизнеса
 
-## Getting Started
+Одна кодовая база и одна база данных обслуживают много клиентов. Клиент —
+кафе, барбершоп, салон — это **тенант**. У него публичный сайт с меню,
+акциями и новостями, и админка, где владелец правит всё это сам. Новый
+клиент добавляется строкой в базе, а не новым проектом.
 
-First, run the development server:
+Стек: Next.js 16 (App Router) · Supabase (Postgres + Auth + Storage) ·
+Tailwind 4 · деплой на Vercel. Интерфейс русский, цены в рублях.
+
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # заполнить ключами из Supabase
+npm run dev                  # http://localhost:3200
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Команды
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Команда | Что делает |
+|---|---|
+| `npm run dev` | Дев-сервер на порту 3200 |
+| `npm run build` | Продакшен-сборка |
+| `npm test` | Логика + изоляция тенантов |
+| `npm run test:lib` | Слаги, цены, даты, домены, теги кеша |
+| `npm run test:rls` | Изоляция тенантов на настоящем Postgres (PGlite) |
+| `npm run test:rls:mutate` | Ломает политики и проверяет, что тесты это ловят |
+| `npm run check:supabase` | Ключи, схема, гранты на живом проекте |
+| `npm run lint` | ESLint |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Первая настройка Supabase
 
-## Learn More
+1. Завести проект на [supabase.com](https://supabase.com). Регион — ближайший
+   к посетителям; для России обычно Frankfurt.
+2. Project Settings → API Keys. В `.env.local`:
+   - `NEXT_PUBLIC_SUPABASE_URL` — адрес проекта, **без** `/rest/v1`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — **publishable**-ключ (`sb_publishable_…`)
 
-To learn more about Next.js, take a look at the following resources:
+   Секретный ключ (`sb_secret_…`) сюда класть нельзя ни при каких
+   обстоятельствах: переменные с префиксом `NEXT_PUBLIC_` попадают в
+   javascript, который скачивает каждый посетитель, а секретный ключ обходит
+   все политики доступа.
+3. SQL Editor → выполнить по порядку файлы из `supabase/migrations/`.
+4. Проверить: `npm run check:supabase` — все строки должны быть без «ОШИБКА».
+5. Демо-данные для показа клиентам: `supabase/seed.sql`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Проверка изоляции на живом проекте
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`npm run test:rls` гоняет политики локально, но на боевом проекте стоит
+убедиться отдельно:
 
-## Deploy on Vercel
+1. Authentication → Users → завести `flora@mini-cms.test` и
+   `zarya@mini-cms.test` с галкой Auto Confirm.
+2. SQL Editor → `supabase/checks/01_test_data.sql`, затем
+   `supabase/checks/02_rls_check.sql`.
+3. Все 17 строк должны быть «ОК». Любой «ПРОВАЛ» — дыра в изоляции, дальше
+   идти нельзя.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Как заводится новый клиент
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Authentication → Users → добавить владельца.
+2. В SQL Editor:
+
+```sql
+with t as (
+  insert into public.tenants (slug, name)
+  values ('flora', 'Кофейня «Флора»')
+  returning id
+)
+insert into public.tenant_members (user_id, tenant_id, role)
+select u.id, t.id, 'owner'
+from auth.users u, t
+where u.email = 'owner@example.com';
+```
+
+3. Сайт открывается по адресу `/flora`, админка — по `/admin`.
+
+## Деплой на Vercel
+
+1. Импортировать репозиторий, корень проекта — `mini-cms`.
+2. Environment Variables: те же переменные, что в `.env.local`.
+   `NEXT_PUBLIC_ROOT_DOMAIN` — домен сервиса, если нужны поддомены.
+3. Deploy.
+
+### Поддомены и свои домены клиентов
+
+- **Поддомен** `flora.домен.рф`: в Vercel добавить wildcard-домен
+  `*.домен.рф`, в DNS — запись `*` на Vercel. Слаг берётся из адреса
+  строковой логикой, база при этом не опрашивается.
+- **Свой домен клиента** `flora-cafe.ru`: добавить домен в Vercel, а в базе
+  проставить `tenants.custom_domain = 'flora-cafe.ru'`.
+- **Запасной путь** `/flora` работает всегда и никуда не девается.
+
+## Чего не хватает для боевой эксплуатации
+
+Проект собран и покрыт тестами, но перед первым платящим клиентом стоит
+закрыть:
+
+- **Бэкапы.** На бесплатном тарифе Supabase их нет. До заливки реального
+  контента настроить регулярный дамп.
+- **Восстановление пароля.** Вход по почте и паролю сделан, сброса пароля
+  пока нет — потребуется свой SMTP.
+- **Сон проекта.** Бесплатный Supabase засыпает после 7 дней без запросов.
+  Для сайта с трафиком не проблема, для «тихого» клиента — да.
+- **Уборка картинок.** Файл удаляется вместе с записью, но если удалить
+  тенанта напрямую в базе, его папка в Storage останется.
+- **Мягкий 404 на несуществующем слаге.** Публичные страницы отдаются
+  частичным пререндером: статическая оболочка уходит раньше, чем становится
+  известно, что тенанта нет, и статус ответа к этому моменту уже 200.
+  Страница показывает «не найдено» и закрыта от индексации через `noindex`,
+  но формально это не 404. Чтобы получить настоящий статус, пришлось бы
+  ходить в базу из `proxy.ts` на каждый запрос — цена выше выгоды.
