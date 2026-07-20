@@ -135,31 +135,40 @@ async function get(path) {
 
 console.log('\n=== Связь с проектом ===')
 
-const root = await get('/rest/v1/')
-if (root.status === 0) {
-  bad(`не достучаться до ${host}: ${root.network}`)
+// Пробуем НАСТОЯЩУЮ таблицу, а не корень /rest/v1/. Корень отдаёт описание
+// всей схемы, и Supabase закрывает его секретным ключом — publishable там
+// отвергается по замыслу. Проба по корню объявила бы нерабочим совершенно
+// рабочий ключ.
+const probe = await get('/rest/v1/tenants?select=id&limit=1')
+
+if (probe.status === 0) {
+  bad(`не достучаться до ${host}: ${probe.network}`)
   console.log('\nПроверь URL и интернет. Дальше проверять нечего.\n')
   process.exit(1)
 }
-if (root.status === 401 || root.status === 403) {
-  const detail = root.body?.message ?? root.body?.msg ?? root.body?.error ?? '(без пояснения)'
-  bad(`ключ отвергнут (${root.status}): ${detail}`)
 
-  // У проектов, созданных недавно, старые JWT-ключи по умолчанию отключены
-  // в пользу publishable/secret. Ключ при этом выглядит совершенно нормально
-  // и декодируется — но не принимается.
-  if (key.split('.').length === 3) {
+const probeReason = String(probe.body?.message ?? probe.body?.error ?? '')
+const keyRejected = probe.status === 401 || probe.status === 403
+
+if (keyRejected) {
+  bad(`ключ отвергнут (${probe.status}): ${probeReason || '(без пояснения)'}`)
+
+  if (/secret/i.test(probeReason)) {
     console.log(
-      '\n  Скорее всего в проекте отключены legacy JWT-ключи.\n' +
-        '  Возьми publishable-ключ: Project Settings → API Keys → вкладка «API keys»,\n' +
-        '  значение вида sb_publishable_… — и положи его в NEXT_PUBLIC_SUPABASE_ANON_KEY.',
+      '\n  Проект требует секретный ключ даже для чтения таблиц — значит,\n' +
+        '  в Project Settings → Data API выключен публичный доступ.\n' +
+        '  Этому движку он нужен: публичные сайты читают данные под ролью anon,\n' +
+        '  а от чужого их закрывает RLS, а не отсутствие ключа.',
+    )
+  } else if (key.split('.').length === 3) {
+    console.log(
+      '\n  Похоже, в проекте отключены legacy JWT-ключи.\n' +
+        '  Возьми publishable-ключ: Project Settings → API Keys → вкладка «API keys».',
     )
   }
-  console.log('\nДальше проверять нечего.\n')
-  process.exitCode = 1
+} else {
+  ok(`Data API принимает ключ (${probe.status})`)
 }
-const keyRejected = root.status === 401 || root.status === 403
-if (!keyRejected) ok(`Data API отвечает (${root.status})`)
 
 const health = await get('/auth/v1/health')
 if (health.status === 200) ok('сервис авторизации жив')
@@ -226,21 +235,65 @@ if (missing === 0 && keyIsSecret) {
   }
 }
 
+// --- Сверка колонок с lib/types.ts ---------------------------------------
+//
+// Типы в lib/types.ts написаны руками по миграциям, потому что генератор
+// Supabase требует живого проекта. Разойтись с реальной схемой они могут
+// молча: код соберётся, а запрос упадёт уже у клиента.
+//
+// Список ниже намеренно повторяет lib/types.ts — в этом и смысл проверки.
+// Правишь типы — правь и здесь, иначе сверять будет не с чем.
+//
+// PostgREST отвергает запрос несуществующей колонки, поэтому проверить можно
+// поимённо и на пустой таблице: limit=0 не требует ни одной строки.
+const EXPECTED_COLUMNS = {
+  tenants: 'id,slug,name,custom_domain',
+  site_settings:
+    'tenant_id,logo_url,primary_color,phone,address,working_hours,socials,about,yandex_map_url,updated_at',
+  menu_categories: 'id,tenant_id,name,sort_order,created_at',
+  menu_items:
+    'id,tenant_id,category_id,name,description,price,image_url,is_available,sort_order,created_at',
+  promotions:
+    'id,tenant_id,title,description,image_url,starts_at,ends_at,is_active,created_at',
+  news: 'id,tenant_id,title,slug,body,cover_image_url,is_published,published_at,created_at',
+}
+
+if (missing === 0) {
+  console.log('\n=== Сверка колонок с lib/types.ts ===')
+
+  for (const [table, columns] of Object.entries(EXPECTED_COLUMNS)) {
+    const res = await get(`/rest/v1/${table}?select=${columns}&limit=0`)
+
+    if (res.status === 200) {
+      ok(`${table}: все ${columns.split(',').length} колонок на месте`)
+    } else {
+      bad(
+        `${table}: схема разошлась с типами — ${res.body?.message ?? res.status}` +
+          `${res.body?.hint ? ` (${res.body.hint})` : ''}`,
+      )
+    }
+  }
+}
+
 // --- Хранилище -----------------------------------------------------------
 console.log('\n=== Хранилище ===')
 
 // Запрашиваем заведомо отсутствующий файл в публичном бакете. Ответ различает
 // два случая: «нет бакета» и «нет файла». Списком файлов проверять нельзя —
 // тот эндпоинт принимает POST и на GET ответит 404 при живом бакете.
-const probe = await get('/storage/v1/object/public/tenant-media/__probe__')
-const reason = String(probe.body?.error ?? probe.body?.message ?? '')
+const bucketProbe = await get('/storage/v1/object/public/tenant-media/__probe__')
+const bucketReason = String(bucketProbe.body?.error ?? bucketProbe.body?.message ?? '')
 
-if (/bucket not found/i.test(reason)) {
+if (/bucket not found/i.test(bucketReason)) {
   bad('бакета tenant-media нет — миграция 20260720120200 не применена')
-} else if (/not.?found/i.test(reason) || probe.status === 404 || probe.status === 400) {
+} else if (
+  /not.?found/i.test(bucketReason) ||
+  bucketProbe.status === 404 ||
+  bucketProbe.status === 400
+) {
   ok('бакет tenant-media на месте (файла нет — так и должно быть)')
 } else {
-  warn(`бакет проверить не вышло: ${probe.status} ${reason || '(без пояснения)'}`)
+  warn(`бакет проверить не вышло: ${bucketProbe.status} ${bucketReason || '(без пояснения)'}`)
 }
 
 // --- Тестовые данные -----------------------------------------------------
