@@ -56,13 +56,33 @@
 
 ```
 app/(public)/[tenant]/   публичные сайты клиентов (SSR)
-app/admin/               админка владельца бизнеса
+app/admin/(auth)/login/  страница входа — без защиты
+app/admin/(protected)/   всё остальное в админке — layout редиректит гостей
+app/admin/actions.ts     server actions входа и выхода
 components/{admin,public,ui}
-lib/supabase/            client.ts (браузер) · server.ts (сервер) · env.ts
-lib/tenant.ts            резолв: домен/слаг → тенант
-lib/types.ts             типы из схемы БД (генерируются, руками не правим)
+lib/supabase/            client.ts · server.ts · public.ts · proxy.ts · env.ts
+lib/auth.ts              текущий пользователь и его тенант, requireTenant()
+lib/tenant.ts            резолв: домен/слаг → тенант (Фаза 4)
+lib/types.ts             типы схемы БД
 supabase/migrations/     SQL: таблицы, RLS, политики Storage
+proxy.ts                 защита /admin и продление сессии (бывший middleware.ts)
 ```
+
+Группы маршрутов `(auth)` и `(protected)` нужны, чтобы защищающий layout не
+оборачивал саму страницу входа: иначе редирект на /admin/login зациклился бы.
+
+## Правило для server actions
+
+Каждое действие, которое читает или пишет данные тенанта, начинается с
+
+```ts
+const tenant = await requireTenant()
+```
+
+Не потому, что так аккуратнее, а потому что **proxy до server actions не
+дотягивается**: они приходят POST-запросом на маршрут, где объявлены, и
+матчер proxy их может не накрыть. Проверка внутри действия — единственная,
+на которую можно положиться. Плюс RLS в базе как последний рубеж.
 
 ## Проверка изоляции тенантов
 

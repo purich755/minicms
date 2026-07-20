@@ -2,6 +2,8 @@ import 'server-only'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
+import type { Database } from '@/lib/types'
+
 import { supabaseAnonKey, supabaseUrl } from './env'
 
 /**
@@ -20,7 +22,7 @@ import { supabaseAnonKey, supabaseUrl } from './env'
  * и не даст ничего записать. Там нужен createClient() из ./server.
  */
 export function createPublicClient() {
-  return createSupabaseClient(supabaseUrl(), supabaseAnonKey(), {
+  return createSupabaseClient<Database>(supabaseUrl(), supabaseAnonKey(), {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

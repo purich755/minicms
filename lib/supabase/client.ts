@@ -1,5 +1,7 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+import type { Database } from '@/lib/types'
+
 import { supabaseAnonKey, supabaseUrl } from './env'
 
 /**
@@ -9,5 +11,5 @@ import { supabaseAnonKey, supabaseUrl } from './env'
  * RLS-политики для текущего пользователя. Секретных ключей здесь быть не может.
  */
 export function createClient() {
-  return createBrowserClient(supabaseUrl(), supabaseAnonKey())
+  return createBrowserClient<Database>(supabaseUrl(), supabaseAnonKey())
 }
