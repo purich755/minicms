@@ -6,6 +6,7 @@
     "dev": "next dev -p 3200",
     "build": "next build",
     "start": "next start",
+    "start:prod": "next start -p 3201",
     "lint": "eslint",
     "test:rls": "node scripts/test-rls.mjs",
     "test:rls:mutate": "node scripts/test-rls.mjs --mutate",

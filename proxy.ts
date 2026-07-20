@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
 import { HOST_MODE_HEADER } from '@/lib/base-path'
-import { isLocalHost, normalizeHost, subdomainSlug } from '@/lib/host'
+import { isPlatformHost, normalizeHost, subdomainSlug } from '@/lib/host'
 import { updateSession } from '@/lib/supabase/proxy'
 
 /**
@@ -68,9 +68,10 @@ function routeToTenant(request: NextRequest) {
   const host = normalizeHost(request.headers.get('host'))
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? ''
 
-  // Без настроенного корневого домена работает только путь /slug.
-  // Это же режим локальной разработки: поддоменов на localhost нет.
-  if (!rootDomain || isLocalHost(host)) {
+  // Без настроенного корневого домена работает только путь /slug. То же на
+  // служебных адресах платформы — localhost и превью-деплои Vercel: считать
+  // их доменом клиента нельзя, иначе превью целиком уедет в 404.
+  if (!rootDomain || isPlatformHost(host)) {
     return NextResponse.next()
   }
 

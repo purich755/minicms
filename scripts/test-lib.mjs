@@ -9,7 +9,7 @@
 
 import { allContentTags, tags } from '../lib/cache-tags.ts'
 import { formatDate, formatDateTime, formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
-import { isLocalHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
+import { isLocalHost, isPlatformHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
 import { isValidSlug, slugify } from '../lib/slug.ts'
 import { buildMediaPath, storagePathFromUrl, validateImage } from '../lib/storage.ts'
 import {
@@ -249,6 +249,13 @@ check('поддомен: без корневого домена ничего н�
 check('localhost опознаётся', isLocalHost('localhost:3200'), true)
 check('127.0.0.1 опознаётся', isLocalHost('127.0.0.1'), true)
 check('обычный домен — не localhost', isLocalHost('example.ru'), false)
+
+check('превью Vercel — служебный адрес, а не сайт клиента',
+  isPlatformHost('mini-cms-git-master-artem.vercel.app'), true)
+check('localhost — тоже служебный', isPlatformHost('localhost:3200'), true)
+check('домен клиента служебным не считается', isPlatformHost('flora-cafe.ru'), false)
+check('поддомен сервиса служебным не считается',
+  isPlatformHost('flora.example.ru'), false)
 
 // ------------------------------------------------------------- теги кеша
 check('тег тенанта', tags.tenant('flora'), 'tenant:flora')

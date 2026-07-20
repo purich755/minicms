@@ -54,3 +54,16 @@ export function isLocalHost(host: string): boolean {
   const clean = normalizeHost(host)
   return clean === 'localhost' || clean === '127.0.0.1' || clean.endsWith('.localhost')
 }
+
+/**
+ * Служебный адрес самой платформы, а не сайт клиента.
+ *
+ * Сюда попадают локальная разработка и превью-деплои Vercel. Без этой
+ * проверки при заданном корневом домене любой такой адрес считался бы чужим
+ * доменом клиента: proxy искал бы его в custom_domain, не находил — и весь
+ * превью-деплой отдавал бы 404. Здесь работает запасной путь /slug.
+ */
+export function isPlatformHost(host: string): boolean {
+  const clean = normalizeHost(host)
+  return isLocalHost(clean) || clean.endsWith('.vercel.app')
+}
