@@ -8,7 +8,7 @@
  */
 
 import { allContentTags, tags } from '../lib/cache-tags.ts'
-import { formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
+import { formatDate, formatDateTime, formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
 import { isLocalHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
 import { isValidSlug, slugify } from '../lib/slug.ts'
 import { buildMediaPath, storagePathFromUrl, validateImage } from '../lib/storage.ts'
@@ -77,6 +77,12 @@ check('склонение: 11 — исключение', plural(11, 'позиц�
 check('склонение: 21', plural(21, 'позиция', 'позиции', 'позиций'), 'позиция')
 check('склонение: 112', plural(112, 'позиция', 'позиции', 'позиций'), 'позиций')
 check('склонение: 0', plural(0, 'позиция', 'позиции', 'позиций'), 'позиций')
+
+check('дата: без канцелярского « г.»', formatDate('2026-07-17T10:00:00Z'), '17 июля 2026')
+check('дата: пустой вход', formatDate(null), '')
+check('дата: мусор', formatDate('не дата'), '')
+check('дата со временем: тоже без « г.»',
+  formatDateTime('2026-07-17T10:00:00Z').includes(' г.'), false)
 
 check('datetime-local: пустой вход', toDateTimeLocal(null), '')
 check('datetime-local: мусор', toDateTimeLocal('не дата'), '')

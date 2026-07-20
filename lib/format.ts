@@ -29,12 +29,17 @@ export function formatPrice(value: number): string {
   return `${PRICE_FORMATTER.format(value)} ₽`
 }
 
-/** ISO-строка → «20 июля 2026». Пустой вход даёт пустую строку. */
+/**
+ * ISO-строка → «20 июля 2026». Пустой вход даёт пустую строку.
+ *
+ * Intl для ru-RU дописывает « г.» — на сайте кофейни это лишний канцелярит,
+ * и он же расходился бы с formatDateTime, который суффикс не выводит.
+ */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return ''
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
-  return DATE_FORMATTER.format(date)
+  return DATE_FORMATTER.format(date).replace(' г.', '')
 }
 
 /** ISO-строка → «20 июля 2026, 14:30». */
