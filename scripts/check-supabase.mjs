@@ -229,11 +229,18 @@ if (missing === 0 && keyIsSecret) {
 // --- Хранилище -----------------------------------------------------------
 console.log('\n=== Хранилище ===')
 
-const bucket = await get('/storage/v1/object/list/tenant-media')
-if (bucket.status === 404 || bucket.body?.error === 'Bucket not found') {
+// Запрашиваем заведомо отсутствующий файл в публичном бакете. Ответ различает
+// два случая: «нет бакета» и «нет файла». Списком файлов проверять нельзя —
+// тот эндпоинт принимает POST и на GET ответит 404 при живом бакете.
+const probe = await get('/storage/v1/object/public/tenant-media/__probe__')
+const reason = String(probe.body?.error ?? probe.body?.message ?? '')
+
+if (/bucket not found/i.test(reason)) {
   bad('бакета tenant-media нет — миграция 20260720120200 не применена')
+} else if (/not.?found/i.test(reason) || probe.status === 404 || probe.status === 400) {
+  ok('бакет tenant-media на месте (файла нет — так и должно быть)')
 } else {
-  ok('бакет tenant-media на месте')
+  warn(`бакет проверить не вышло: ${probe.status} ${reason || '(без пояснения)'}`)
 }
 
 // --- Тестовые данные -----------------------------------------------------
