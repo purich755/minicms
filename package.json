@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:rls": "node scripts/test-rls.mjs",
-    "test:rls:mutate": "node scripts/test-rls.mjs --mutate"
+    "test:rls:mutate": "node scripts/test-rls.mjs --mutate",
+    "test:lib": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-lib.mjs",
+    "test": "npm run test:lib && npm run test:rls"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
