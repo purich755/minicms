@@ -56,10 +56,24 @@ console.log('\n=== Ключ ===')
 
 const projectRef = host.split('.')[0]
 
+// Ключ, обходящий RLS. Ниже это меняет не только вердикт, но и то, какие
+// выводы вообще позволено делать: под таким ключом видно всё, и фраза
+// «аноним читает» была бы враньём.
+let keyIsSecret = false
+
 if (key.startsWith('sb_publishable_')) {
   ok('тип: publishable (новый формат Supabase) — годится для браузера')
 } else if (key.startsWith('sb_secret_')) {
-  bad('это секретный ключ! В NEXT_PUBLIC_* он уедет в браузер. Нужен publishable.')
+  keyIsSecret = true
+  bad('это СЕКРЕТНЫЙ ключ, а лежит он в NEXT_PUBLIC_ — то есть уедет в браузер')
+  console.log(
+    '\n  Такой ключ обходит RLS полностью: кто его получит, тот читает и правит\n' +
+      '  данные всех клиентов сразу. А NEXT_PUBLIC_* Next вшивает в javascript,\n' +
+      '  который скачивает каждый посетитель.\n' +
+      '\n  Считай этот ключ скомпрометированным: отзови его в панели Supabase\n' +
+      '  (Project Settings → API Keys → Revoke) и выпусти новый.\n' +
+      '  В .env.local нужен publishable-ключ вида sb_publishable_…\n',
+  )
 } else if (key.split('.').length === 3) {
   try {
     const payload = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString())
@@ -67,6 +81,7 @@ if (key.startsWith('sb_publishable_')) {
     if (payload.role === 'anon') {
       ok('тип: анонимный JWT — годится для браузера')
     } else if (payload.role === 'service_role') {
+      keyIsSecret = true
       bad('это service_role! Он обходит RLS и в браузер попадать не должен. Нужен anon.')
     } else {
       warn(`роль в ключе: ${payload.role ?? 'не указана'}`)
@@ -176,7 +191,9 @@ for (const [table, select] of TABLES) {
   const res = await get(`/rest/v1/${table}?select=${select}&limit=1`)
 
   if (res.status === 200) {
-    ok(`${table}: есть, аноним читает`)
+    // Под секретным ключом видно всё независимо от политик, поэтому про
+    // доступ анонима здесь сказать нечего — только про наличие таблицы.
+    ok(keyIsSecret ? `${table}: таблица есть` : `${table}: есть, аноним читает`)
   } else if (res.body?.code === 'PGRST205' || res.status === 404) {
     bad(`${table}: таблицы нет — миграции не применены`)
     missing++
@@ -187,7 +204,9 @@ for (const [table, select] of TABLES) {
   }
 }
 
-if (missing === 0) {
+if (missing === 0 && keyIsSecret) {
+  warn('проверки прав анонима пропущены: под секретным ключом они бессмысленны')
+} else if (missing === 0) {
   // tenant_members анониму не выдан вовсе — ожидаем отказ или пустоту.
   const members = await get('/rest/v1/tenant_members?select=user_id&limit=1')
   if (members.status >= 400) {
@@ -228,10 +247,12 @@ if (missing === 0) {
     } else {
       for (const t of tenants.body) ok(`тенант: ${t.slug} — ${t.name}`)
 
-      const drafts = await get('/rest/v1/news?select=id&is_published=eq.false')
-      if (drafts.status === 200 && Array.isArray(drafts.body)) {
-        if (drafts.body.length === 0) ok('черновики анониму не видны — RLS работает')
-        else bad(`анониму видно черновиков: ${drafts.body.length} — RLS не работает!`)
+      if (!keyIsSecret) {
+        const drafts = await get('/rest/v1/news?select=id&is_published=eq.false')
+        if (drafts.status === 200 && Array.isArray(drafts.body)) {
+          if (drafts.body.length === 0) ok('черновики анониму не видны — RLS работает')
+          else bad(`анониму видно черновиков: ${drafts.body.length} — RLS не работает!`)
+        }
       }
     }
   }
