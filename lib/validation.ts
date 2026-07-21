@@ -23,6 +23,29 @@ export type FormState = {
 
 export const EMPTY_FORM_STATE: FormState = { ok: false }
 
+/**
+ * Требования к новому паролю.
+ *
+ * Восемь символов, а не шесть, как позволяет Supabase по умолчанию: пароль
+ * заводится один раз и живёт годами, а владелец кофейни вряд ли включит
+ * двухфакторную аутентификацию.
+ *
+ * Требований к составу (цифры, регистр, спецсимволы) намеренно нет. Они
+ * заставляют людей превращать «пароль» в «Пароль1!» — длина не растёт, а
+ * запоминаемость падает, и пароль переезжает на бумажку под клавиатурой.
+ */
+export const PASSWORD_MIN_LENGTH = 8
+
+/** Ошибка текстом или null, если пароль годится. */
+export function checkPassword(password: string, confirmation: string): string | null {
+  if (!password) return 'Введите новый пароль'
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return `Пароль короче ${PASSWORD_MIN_LENGTH} символов`
+  }
+  if (password !== confirmation) return 'Пароли не совпадают'
+  return null
+}
+
 function raw(formData: FormData, name: string): string {
   const value = formData.get(name)
   return typeof value === 'string' ? value.trim() : ''

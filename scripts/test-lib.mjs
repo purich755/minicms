@@ -7,6 +7,7 @@
  * тестами не покрыта — её проверяют руками на живом проекте.
  */
 
+import { isAuthCallback, isPublicAdminPage, requiresSession } from '../lib/admin-paths.ts'
 import { allContentTags, tags } from '../lib/cache-tags.ts'
 import { formatDate, formatDateTime, formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
 import { isLocalHost, isPlatformHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
@@ -280,6 +281,33 @@ check('localhost — тоже служебный', isPlatformHost('localhost:320
 check('домен клиента служебным не считается', isPlatformHost('flora-cafe.ru'), false)
 check('поддомен сервиса служебным не считается',
   isPlatformHost('flora.example.ru'), false)
+
+// ------------------------------------------------- открытые адреса админки
+//
+// Ошибка здесь — это открытая настежь админка, и в условии внутри proxy её
+// глазами не видно. Поэтому список проверяется поимённо.
+
+check('вход открыт без сессии', requiresSession('/admin/login'), false)
+check('восстановление открыто без сессии', requiresSession('/admin/forgot'), false)
+check('ссылка из письма не требует сессии', requiresSession('/admin/auth/callback'), false)
+
+check('обзор требует входа', requiresSession('/admin'), true)
+check('меню требует входа', requiresSession('/admin/menu'), true)
+check('новости требуют входа', requiresSession('/admin/news'), true)
+check('настройки требуют входа', requiresSession('/admin/settings'), true)
+check('учётная запись требует входа', requiresSession('/admin/account'), true)
+check('неизвестный адрес требует входа', requiresSession('/admin/что-то-новое'), true)
+
+// Приписка к открытому адресу не должна его открывать.
+check('подстрока «login» не открывает адрес', requiresSession('/admin/login/steal'), true)
+check('подстрока «forgot» не открывает адрес', requiresSession('/admin/forgotten'), true)
+check('подстрока callback не открывает адрес', requiresSession('/admin/auth/callback/x'), true)
+
+// Залогиненного уводим со страниц входа, но НЕ с обмена кода: иначе
+// восстановление пароля сломается у тех, кто уже вошёл на другом устройстве.
+check('вход — страница, с которой уводим', isPublicAdminPage('/admin/login'), true)
+check('обмен кода — не страница входа', isPublicAdminPage('/admin/auth/callback'), false)
+check('обмен кода опознаётся', isAuthCallback('/admin/auth/callback'), true)
 
 // ------------------------------------------------------------- теги кеша
 check('тег тенанта', tags.tenant('flora'), 'tenant:flora')

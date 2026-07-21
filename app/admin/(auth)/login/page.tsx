@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { Suspense } from 'react'
 
 import { LoginForm } from './login-form'
@@ -7,7 +8,29 @@ export const metadata: Metadata = {
   title: 'Вход — панель управления',
 }
 
-type Params = Promise<{ next?: string }>
+type Params = Promise<{ next?: string; reset?: string }>
+
+/**
+ * Что пошло не так со ссылкой из письма.
+ *
+ * Без этого человек, кликнувший по просроченной ссылке, просто оказывался бы
+ * на странице входа и не понимал, почему.
+ */
+async function ResetNotice({ searchParams }: { searchParams: Params }) {
+  const { reset } = await searchParams
+  if (!reset) return null
+
+  const text =
+    reset === 'expired'
+      ? 'Ссылка устарела или уже была использована. Запросите новую.'
+      : 'Ссылка не сработала. Запросите новую.'
+
+  return (
+    <p className="mb-5 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900 ring-1 ring-amber-200">
+      {text}
+    </p>
+  )
+}
 
 /**
  * Адрес, куда вернуть человека после входа.
@@ -34,14 +57,27 @@ export default function LoginPage({ searchParams }: { searchParams: Params }) {
           Управление меню, акциями и новостями вашего заведения.
         </p>
 
+        <Suspense fallback={null}>
+          <ResetNotice searchParams={searchParams} />
+        </Suspense>
+
         <LoginForm>
           <Suspense fallback={null}>
             <ReturnPathInput searchParams={searchParams} />
           </Suspense>
         </LoginForm>
 
+        <p className="mt-5 text-center text-sm">
+          <Link
+            href="/admin/forgot"
+            className="text-[var(--muted)] underline underline-offset-4 transition-colors hover:text-[var(--foreground)]"
+          >
+            Забыли пароль?
+          </Link>
+        </p>
+
         <p className="mt-6 border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
-          Доступ выдаёт администратор сервиса. Забыли пароль — напишите нам.
+          Доступ выдаёт администратор сервиса.
         </p>
       </div>
     </main>

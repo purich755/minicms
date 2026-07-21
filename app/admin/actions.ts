@@ -1,5 +1,6 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
@@ -67,4 +68,53 @@ export async function signOut(): Promise<void> {
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/admin/login')
+}
+
+export type ResetRequestState = { sent: boolean; error: string | null }
+
+/**
+ * Письмо со ссылкой на смену пароля.
+ *
+ * Ответ всегда одинаковый — «письмо отправлено», — даже если такой почты в
+ * системе нет. Иначе форма превращается в способ выяснить, кто у нас клиент:
+ * ввёл адрес, увидел «пользователь не найден» — узнал ответ.
+ *
+ * Адрес возврата берём из заголовков запроса, а не из переменной окружения:
+ * сервис открывается и на localhost, и на домене Vercel, и на своём домене,
+ * а ссылка в письме обязана вести туда, откуда её попросили.
+ */
+export async function requestPasswordReset(
+  _prev: ResetRequestState,
+  formData: FormData,
+): Promise<ResetRequestState> {
+  const email = String(formData.get('email') ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!email) return { sent: false, error: 'Введите почту.' }
+
+  const headerList = await headers()
+  const host = headerList.get('host') ?? ''
+  const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https'
+
+  const supabase = await createClient()
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${protocol}://${host}/admin/auth/callback`,
+    })
+
+    // Ограничение частоты — единственный случай, когда молчать вредно:
+    // человек будет жать кнопку и ждать письмо, которого не будет.
+    if (error?.status === 429) {
+      return {
+        sent: false,
+        error: 'Слишком много запросов. Письмо можно запросить раз в несколько минут.',
+      }
+    }
+  } catch {
+    return { sent: false, error: 'Сервис недоступен. Попробуйте через минуту.' }
+  }
+
+  return { sent: true, error: null }
 }

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { isAuthCallback, isPublicAdminPage, requiresSession } from '@/lib/admin-paths'
 import { HOST_MODE_HEADER } from '@/lib/base-path'
 import { isPlatformHost, normalizeHost, subdomainSlug } from '@/lib/host'
 import { updateSession } from '@/lib/supabase/proxy'
@@ -32,9 +33,14 @@ export async function proxy(request: NextRequest) {
 async function guardAdmin(request: NextRequest) {
   const { response, userId } = await updateSession(request)
   const { pathname } = request.nextUrl
-  const isLoginPage = pathname === '/admin/login'
 
-  if (!userId && !isLoginPage) {
+  // Обмен кода из письма на сессию не редиректим ни в какую сторону: он
+  // обязан отработать и без сессии, и с ней.
+  if (isAuthCallback(pathname)) return response
+
+  const isPublicPage = isPublicAdminPage(pathname)
+
+  if (!userId && requiresSession(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin/login'
     url.search = ''
@@ -46,7 +52,7 @@ async function guardAdmin(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (userId && isLoginPage) {
+  if (userId && isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin'
     url.search = ''
