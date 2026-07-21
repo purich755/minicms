@@ -13,9 +13,13 @@
     "test:lib": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-lib.mjs",
     "test": "npm run test:lib && npm run test:rls",
     "check:supabase": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-supabase.mjs",
+    "migrate:sql": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/migrate-print.mjs",
     "backup": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/backup.mjs",
     "restore": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/restore.mjs",
-    "tenant:create": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/tenant-create.mjs"
+    "tenant:create": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/tenant-create.mjs",
+    "tenant:list": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/tenant-toggle.mjs list",
+    "tenant:enable": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/tenant-toggle.mjs enable",
+    "tenant:disable": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/tenant-toggle.mjs disable"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",

@@ -247,9 +247,9 @@ if (missing === 0 && keyIsSecret) {
 // PostgREST отвергает запрос несуществующей колонки, поэтому проверить можно
 // поимённо и на пустой таблице: limit=0 не требует ни одной строки.
 const EXPECTED_COLUMNS = {
-  tenants: 'id,slug,name,custom_domain',
+  tenants: 'id,slug,name,custom_domain,is_active',
   site_settings:
-    'tenant_id,logo_url,primary_color,phone,address,working_hours,socials,about,yandex_map_url,updated_at',
+    'tenant_id,logo_url,hero_image_url,primary_color,phone,address,working_hours,socials,about,yandex_map_url,updated_at',
   menu_categories: 'id,tenant_id,name,sort_order,created_at',
   menu_items:
     'id,tenant_id,category_id,name,description,price,image_url,is_available,sort_order,created_at',

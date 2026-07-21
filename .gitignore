@@ -47,3 +47,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# собирается из migrations/ командой npm run migrate:sql — в git ему нельзя,
+# устаревшая копия схемы хуже, чем её отсутствие
+/supabase/ПРИМЕНИТЬ.sql

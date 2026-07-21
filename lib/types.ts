@@ -24,6 +24,7 @@ export type Database = {
           slug: string
           name: string
           custom_domain: string | null
+          is_active: boolean
           plan: string
           owner_user_id: string | null
           created_at: Timestamp
@@ -33,6 +34,7 @@ export type Database = {
           slug: string
           name: string
           custom_domain?: string | null
+          is_active?: boolean
           plan?: string
           owner_user_id?: string | null
           created_at?: Timestamp
@@ -78,6 +80,7 @@ export type Database = {
         Row: {
           tenant_id: string
           logo_url: string | null
+          hero_image_url: string | null
           primary_color: string
           phone: string | null
           address: string | null
@@ -90,6 +93,7 @@ export type Database = {
         Insert: {
           tenant_id: string
           logo_url?: string | null
+          hero_image_url?: string | null
           primary_color?: string
           phone?: string | null
           address?: string | null
@@ -100,6 +104,7 @@ export type Database = {
         }
         Update: {
           logo_url?: string | null
+          hero_image_url?: string | null
           primary_color?: string
           phone?: string | null
           address?: string | null

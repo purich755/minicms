@@ -14,6 +14,8 @@ export type CurrentTenant = {
   slug: string
   name: string
   customDomain: string | null
+  /** false — публичный сайт выключен. Доступ в панель при этом сохраняется. */
+  isActive: boolean
   role: string
 }
 
@@ -87,13 +89,25 @@ export const getCurrentTenant = cache(async (): Promise<CurrentTenant | null> =>
 
   const supabase = await createClient()
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('tenant_members')
-    .select('role, tenant:tenants(id, slug, name, custom_domain)')
+    .select('role, tenant:tenants(id, slug, name, custom_domain, is_active)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
+
+  // «Членства нет» и «запрос не выполнился» снаружи выглядят одинаково —
+  // человек видит «аккаунт не привязан к заведению». Для второго случая это
+  // сообщение уводит в противоположную сторону, поэтому настоящую причину
+  // пишем в лог сервера.
+  //
+  // Самый вероятный источник — выкатили код раньше миграции: запрос просит
+  // колонку, которой в базе ещё нет. Проверять заранее: npm run check:supabase
+  if (error) {
+    console.error('[auth] не прочитать тенанта пользователя:', error.message)
+    return null
+  }
 
   const tenant = data?.tenant
   if (!tenant) return null
@@ -103,6 +117,7 @@ export const getCurrentTenant = cache(async (): Promise<CurrentTenant | null> =>
     slug: tenant.slug,
     name: tenant.name,
     customDomain: tenant.custom_domain,
+    isActive: tenant.is_active,
     role: data.role,
   }
 })
