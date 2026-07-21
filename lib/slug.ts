@@ -56,3 +56,45 @@ export function slugify(input: string): string {
 export function isValidSlug(value: string): boolean {
   return /^[a-z0-9][a-z0-9-]{0,127}$/.test(value)
 }
+
+/**
+ * Слова, которые нельзя занимать под адрес заведения: слаг «admin» перекрыл
+ * бы маршрут админки. Список повторяет ограничение tenants_slug_format.
+ */
+export const RESERVED_SLUGS = [
+  'admin',
+  'api',
+  'www',
+  'app',
+  'static',
+  'public',
+  'assets',
+  '_next',
+] as const
+
+/**
+ * Проходит ли строка ограничение tenants_slug_format.
+ *
+ * Строже, чем у новости: первым символом обязана быть буква (не цифра), длина
+ * от 2 до 63, и зарезервированные слова исключены. Проверка продублирована
+ * здесь, чтобы скрипт подключения клиента отказал сразу и понятной фразой, а
+ * не ловил невнятную ошибку от Postgres.
+ */
+export function isValidTenantSlug(value: string): boolean {
+  return (
+    /^[a-z][a-z0-9-]{1,62}$/.test(value) &&
+    !RESERVED_SLUGS.includes(value as (typeof RESERVED_SLUGS)[number])
+  )
+}
+
+/**
+ * Адрес заведения из его названия. Пустая строка — предложить нечего,
+ * пусть вводят руками.
+ *
+ * Ведущие цифры срезаются: «1-я Кофейня» дало бы «1-ya-kofeynya», а слаг
+ * обязан начинаться с буквы.
+ */
+export function tenantSlugify(input: string): string {
+  const candidate = slugify(input).replace(/^[0-9-]+/, '')
+  return isValidTenantSlug(candidate) ? candidate : ''
+}

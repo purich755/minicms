@@ -41,6 +41,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# резервные копии: там живые данные клиентов, в репозиторий им нельзя
+/backups
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
