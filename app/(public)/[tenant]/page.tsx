@@ -2,17 +2,20 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
+import { IfHidden } from '@/components/public/hidden-badge'
 import { HomeSkeleton } from '@/components/public/skeletons'
 import { getBasePath } from '@/lib/base-path'
 import { formatDate, formatPrice } from '@/lib/format'
+import { isPreviewFor } from '@/lib/preview'
 import {
-  getActivePromotions,
-  getMenu,
-  getNewsList,
   getSiteSettings,
+  readMenu,
+  readNewsList,
+  readPromotions,
   type Promotion,
 } from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
+import { menuItemHidden, newsHidden, promotionHidden } from '@/lib/visibility'
 
 type Params = Promise<{ tenant: string }>
 
@@ -43,7 +46,7 @@ function SectionTitle({ children, href }: { children: string; href?: string }) {
 }
 
 /** Крупная карточка первой акции: она и есть главное предложение. */
-function LeadPromo({ promo }: { promo: Promotion }) {
+function LeadPromo({ promo, preview }: { promo: Promotion; preview: boolean }) {
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl bg-[var(--brand-wash)] ring-1 ring-[var(--brand-line)]">
       {promo.image_url ? (
@@ -56,7 +59,10 @@ function LeadPromo({ promo }: { promo: Promotion }) {
         />
       ) : null}
       <div className="flex flex-1 flex-col p-7">
-        <h3 className="display text-2xl">{promo.title}</h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="display text-2xl">{promo.title}</h3>
+          <IfHidden preview={preview} of={promotionHidden(promo)} />
+        </div>
         {promo.description ? (
           <p className="mt-3 max-w-prose text-stone-700">{promo.description}</p>
         ) : null}
@@ -68,10 +74,13 @@ function LeadPromo({ promo }: { promo: Promotion }) {
   )
 }
 
-function SidePromo({ promo }: { promo: Promotion }) {
+function SidePromo({ promo, preview }: { promo: Promotion; preview: boolean }) {
   return (
     <article className="rounded-xl border border-hairline p-5 transition-colors hover:border-[var(--brand-line)]">
-      <h3 className="font-semibold">{promo.title}</h3>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h3 className="font-semibold">{promo.title}</h3>
+        <IfHidden preview={preview} of={promotionHidden(promo)} />
+      </div>
       {promo.description ? (
         <p className="mt-1.5 text-sm text-stone-600">{promo.description}</p>
       ) : null}
@@ -88,11 +97,16 @@ async function HomeContent({ params }: { params: Params }) {
   const tenant = await resolveTenant(slug)
   if (!tenant) notFound()
 
+  // Владелец в предпросмотре читает свои данные под своей сессией и видит всё,
+  // включая неопубликованное. Обычному посетителю флаг всегда false, и всё
+  // идёт по обычному кешируемому пути.
+  const preview = await isPreviewFor(tenant.id)
+
   const [settings, promotions, menu, news, base] = await Promise.all([
     getSiteSettings(tenant.id),
-    getActivePromotions(tenant.id),
-    getMenu(tenant.id),
-    getNewsList(tenant.id, 4),
+    readPromotions(tenant.id, preview),
+    readMenu(tenant.id, preview),
+    readNewsList(tenant.id, preview, 4),
     getBasePath(tenant.slug),
   ])
 
@@ -149,12 +163,12 @@ async function HomeContent({ params }: { params: Params }) {
               компактным столбцом рядом. */}
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="lg:col-span-7">
-              <LeadPromo promo={leadPromo} />
+              <LeadPromo promo={leadPromo} preview={preview} />
             </div>
             {restPromos.length > 0 ? (
               <div className="flex flex-col gap-4 lg:col-span-5">
                 {restPromos.map((promo) => (
-                  <SidePromo key={promo.id} promo={promo} />
+                  <SidePromo key={promo.id} promo={promo} preview={preview} />
                 ))}
               </div>
             ) : null}
@@ -171,6 +185,7 @@ async function HomeContent({ params }: { params: Params }) {
             {previewItems.map((item) => (
               <li key={item.id} className="flex items-baseline gap-3">
                 <span className="shrink-0">{item.name}</span>
+                <IfHidden preview={preview} of={menuItemHidden(item)} />
                 <span
                   aria-hidden
                   className="min-w-6 flex-1 translate-y-[-0.3em] border-b border-dotted border-stone-300"
@@ -200,9 +215,12 @@ async function HomeContent({ params }: { params: Params }) {
                     className="mb-5 h-64 w-full rounded-2xl object-cover transition-transform duration-300 group-hover:scale-[1.01]"
                   />
                 ) : null}
-                <h3 className="display text-2xl transition-colors group-hover:text-brand">
-                  {leadNews.title}
-                </h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="display text-2xl transition-colors group-hover:text-brand">
+                    {leadNews.title}
+                  </h3>
+                  <IfHidden preview={preview} of={newsHidden(leadNews)} />
+                </div>
                 {leadNews.published_at ? (
                   <p className="mt-2 text-sm text-stone-500">
                     {formatDate(leadNews.published_at)}
@@ -219,9 +237,12 @@ async function HomeContent({ params }: { params: Params }) {
                       href={`${base}/news/${item.slug}`}
                       className="group block py-4 first:pt-0"
                     >
-                      <h3 className="font-medium transition-colors group-hover:text-brand">
-                        {item.title}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h3 className="font-medium transition-colors group-hover:text-brand">
+                          {item.title}
+                        </h3>
+                        <IfHidden preview={preview} of={newsHidden(item)} />
+                      </div>
                       {item.published_at ? (
                         <p className="mt-1 text-sm text-stone-500">
                           {formatDate(item.published_at)}

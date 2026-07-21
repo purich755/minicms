@@ -1,10 +1,13 @@
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
+import { IfHidden } from '@/components/public/hidden-badge'
 import { PageSkeleton } from '@/components/public/skeletons'
 import { formatPrice } from '@/lib/format'
-import { getMenu, type MenuItem } from '@/lib/public-data'
+import { isPreviewFor } from '@/lib/preview'
+import { readMenu, type MenuItem } from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
+import { menuItemHidden } from '@/lib/visibility'
 
 export const metadata = { title: 'Меню' }
 
@@ -20,7 +23,7 @@ export default function MenuPage({ params }: { params: Params }) {
   )
 }
 
-function Item({ item }: { item: MenuItem }) {
+function Item({ item, preview }: { item: MenuItem; preview: boolean }) {
   return (
     <li className="flex gap-5 py-5">
       {item.image_url ? (
@@ -38,6 +41,7 @@ function Item({ item }: { item: MenuItem }) {
             должен доходить от блюда до цены без сползания на соседнюю строку. */}
         <div className="flex items-baseline gap-3">
           <h3 className="shrink-0 font-medium">{item.name}</h3>
+          <IfHidden preview={preview} of={menuItemHidden(item)} />
           <span
             aria-hidden
             className="min-w-6 flex-1 translate-y-[-0.3em] border-b border-dotted border-stone-300"
@@ -53,7 +57,15 @@ function Item({ item }: { item: MenuItem }) {
   )
 }
 
-function Category({ name, items }: { name: string; items: MenuItem[] }) {
+function Category({
+  name,
+  items,
+  preview,
+}: {
+  name: string
+  items: MenuItem[]
+  preview: boolean
+}) {
   if (items.length === 0) return null
 
   return (
@@ -65,7 +77,7 @@ function Category({ name, items }: { name: string; items: MenuItem[] }) {
       </h2>
       <ul className="divide-y divide-hairline">
         {items.map((item) => (
-          <Item key={item.id} item={item} />
+          <Item key={item.id} item={item} preview={preview} />
         ))}
       </ul>
     </section>
@@ -78,7 +90,9 @@ async function MenuContent({ params }: { params: Params }) {
   const tenant = await resolveTenant(slug)
   if (!tenant) notFound()
 
-  const { categories, items } = await getMenu(tenant.id)
+  const preview = await isPreviewFor(tenant.id)
+
+  const { categories, items } = await readMenu(tenant.id, preview)
   const uncategorized = items.filter((item) => item.category_id === null)
 
   return (
@@ -94,10 +108,13 @@ async function MenuContent({ params }: { params: Params }) {
               key={category.id}
               name={category.name}
               items={items.filter((item) => item.category_id === category.id)}
+              preview={preview}
             />
           ))}
 
-          {uncategorized.length > 0 ? <Category name="Ещё" items={uncategorized} /> : null}
+          {uncategorized.length > 0 ? (
+            <Category name="Ещё" items={uncategorized} preview={preview} />
+          ) : null}
         </div>
       )}
     </div>

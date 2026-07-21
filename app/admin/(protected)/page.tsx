@@ -1,9 +1,11 @@
 import Link from 'next/link'
 
+import { startPreview } from '@/app/admin/preview-actions'
 import { getCurrentTenant } from '@/lib/auth'
+import { plural } from '@/lib/format'
 import { createClient } from '@/lib/supabase/server'
 
-export const metadata = { title: 'Дашборд — панель управления' }
+export const metadata = { title: 'Обзор — панель управления' }
 
 async function counts() {
   const supabase = await createClient()
@@ -23,14 +25,27 @@ async function counts() {
   }
 }
 
-function Card({ label, value, href }: { label: string; value: number; href: string }) {
+function Stat({ value, label, href }: { value: number; label: string; href: string }) {
   return (
     <Link
       href={href}
-      className="rounded-xl border border-[var(--border)] bg-white p-5 transition hover:border-[var(--accent)]"
+      className="group flex items-baseline gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-[var(--accent-soft)]"
     >
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="mt-1 text-3xl font-semibold tabular-nums">{value}</p>
+      <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-sm text-[var(--muted)] transition-colors group-hover:text-[var(--foreground)]">
+        {label}
+      </span>
+    </Link>
+  )
+}
+
+function QuickAction({ href, children }: { href: string; children: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-lg border border-[var(--border)] bg-white px-4 py-2.5 text-sm transition-colors hover:border-[var(--foreground)]"
+    >
+      {children}
     </Link>
   )
 }
@@ -43,30 +58,80 @@ export default async function DashboardPage() {
   return (
     <>
       <h1 className="text-2xl font-semibold">{tenant?.name}</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Всё, что вы здесь измените, сразу окажется на сайте заведения.
+      <p className="mt-1.5 text-[var(--muted)]">
+        Всё, что вы здесь измените, окажется на сайте сразу.
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <Card label="Позиций в меню" value={menu} href="/admin/menu" />
-        <Card label="Акций" value={promotions} href="/admin/promotions" />
-        <Card label="Новостей" value={news} href="/admin/news" />
-      </div>
+      {/* Адрес сайта — главное на этой странице: именно его владелец
+          отправляет гостям. Поэтому отдельным блоком, а не строкой в углу. */}
+      <section className="mt-8 rounded-xl border border-[var(--border)] bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs tracking-[0.14em] text-[var(--muted)] uppercase">
+              Адрес сайта
+            </p>
+            <p className="mt-1.5 truncate font-medium">/{tenant?.slug}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2.5">
+            {/* Предпросмотр — это запись cookie, поэтому форма, а не ссылка. */}
+            <form action={startPreview}>
+              <input type="hidden" name="returnTo" value={`/${tenant?.slug}`} />
+              <button
+                type="submit"
+                className="rounded-lg border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-medium transition-colors hover:border-[var(--foreground)]"
+              >
+                Предпросмотр
+              </button>
+            </form>
 
-      <div className="mt-8 rounded-xl border border-[var(--border)] bg-white p-5">
-        <h2 className="font-medium">Адрес сайта</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          По этой ссылке заведение видят посетители. Хотите свой домен — напишите нам,
-          подключим.
+            <Link
+              href={`/${tenant?.slug}`}
+              target="_blank"
+              className="rounded-lg bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-white transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0"
+            >
+              Открыть сайт
+            </Link>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-[var(--muted)]">
+          «Открыть сайт» — то, что видят посетители. «Предпросмотр» — то же самое, но
+          вместе с черновиками и выключенными акциями: видно только вам.
         </p>
-        <Link
-          href={`/${tenant?.slug}`}
-          target="_blank"
-          className="mt-3 inline-block text-sm text-[var(--accent)] underline-offset-2 hover:underline"
-        >
-          /{tenant?.slug}
-        </Link>
-      </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-[var(--border)] bg-white p-2.5">
+        {/* Не три одинаковые плитки: цифры в строку читаются быстрее и не
+            притворяются важнее, чем они есть. */}
+        <div className="flex flex-wrap">
+          <Stat
+            value={menu}
+            label={plural(menu, 'позиция', 'позиции', 'позиций')}
+            href="/admin/menu"
+          />
+          <Stat
+            value={promotions}
+            label={plural(promotions, 'акция', 'акции', 'акций')}
+            href="/admin/promotions"
+          />
+          <Stat
+            value={news}
+            label={plural(news, 'новость', 'новости', 'новостей')}
+            href="/admin/news"
+          />
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-sm tracking-[0.14em] text-[var(--muted)] uppercase">
+          Быстрые действия
+        </h2>
+        <div className="mt-3 flex flex-wrap gap-2.5">
+          <QuickAction href="/admin/menu/items/new">Добавить позицию</QuickAction>
+          <QuickAction href="/admin/promotions/new">Создать акцию</QuickAction>
+          <QuickAction href="/admin/news/new">Написать новость</QuickAction>
+          <QuickAction href="/admin/settings">Изменить контакты</QuickAction>
+        </div>
+      </section>
     </>
   )
 }

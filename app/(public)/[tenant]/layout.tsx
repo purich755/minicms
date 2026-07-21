@@ -2,9 +2,11 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
+import { PreviewBar } from '@/components/public/preview-bar'
 import { SiteFooter, SiteHeader } from '@/components/public/site-chrome'
 import { HeaderSkeleton } from '@/components/public/skeletons'
 import { getBasePath } from '@/lib/base-path'
+import { countHidden, isPreviewFor } from '@/lib/preview'
 import { getSiteSettings } from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
 
@@ -69,6 +71,20 @@ async function Header({ params }: { params: Params }) {
   )
 }
 
+/**
+ * Плашка предпросмотра. Для обычного посетителя эта ветка стоит одного
+ * чтения cookie и заканчивается на null — ни запроса в базу, ни разметки.
+ */
+async function Preview({ params }: { params: Params }) {
+  const { tenant: slug } = await params
+  const tenant = await resolveTenant(slug)
+  if (!tenant) return null
+
+  if (!(await isPreviewFor(tenant.id))) return null
+
+  return <PreviewBar hiddenCount={await countHidden(tenant.id)} />
+}
+
 async function Footer({ params }: { params: Params }) {
   const { tenant: slug } = await params
   const tenant = await resolveTenant(slug)
@@ -110,6 +126,10 @@ export default function PublicSiteLayout({
 
       <Suspense fallback={null}>
         <Footer params={params} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <Preview params={params} />
       </Suspense>
     </div>
   )

@@ -2,11 +2,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
+import { IfHidden } from '@/components/public/hidden-badge'
 import { PageSkeleton } from '@/components/public/skeletons'
 import { getBasePath } from '@/lib/base-path'
 import { formatDate } from '@/lib/format'
-import { getNewsList } from '@/lib/public-data'
+import { isPreviewFor } from '@/lib/preview'
+import { readNewsList } from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
+import { newsHidden } from '@/lib/visibility'
 
 export const metadata = { title: 'Новости' }
 
@@ -28,7 +31,12 @@ async function NewsContent({ params }: { params: Params }) {
   const tenant = await resolveTenant(slug)
   if (!tenant) notFound()
 
-  const [news, base] = await Promise.all([getNewsList(tenant.id), getBasePath(tenant.slug)])
+  const preview = await isPreviewFor(tenant.id)
+
+  const [news, base] = await Promise.all([
+    readNewsList(tenant.id, preview),
+    getBasePath(tenant.slug),
+  ])
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-20">
@@ -59,9 +67,12 @@ async function NewsContent({ params }: { params: Params }) {
                       {formatDate(item.published_at)}
                     </p>
                   ) : null}
-                  <h2 className="display mt-2 text-xl transition-colors group-hover:text-brand sm:text-2xl">
-                    {item.title}
-                  </h2>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <h2 className="display text-xl transition-colors group-hover:text-brand sm:text-2xl">
+                      {item.title}
+                    </h2>
+                    <IfHidden preview={preview} of={newsHidden(item)} />
+                  </div>
                   <span className="mt-3 inline-block text-sm text-stone-500 transition-transform duration-200 group-hover:translate-x-1">
                     Читать →
                   </span>

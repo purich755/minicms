@@ -10,8 +10,14 @@
 import { allContentTags, tags } from '../lib/cache-tags.ts'
 import { formatDate, formatDateTime, formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
 import { isLocalHost, isPlatformHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
-import { isValidSlug, slugify } from '../lib/slug.ts'
+import { isValidSlug, isValidTenantSlug, slugify, tenantSlugify } from '../lib/slug.ts'
 import { buildMediaPath, storagePathFromUrl, validateImage } from '../lib/storage.ts'
+import {
+  HIDDEN_LABEL,
+  menuItemHidden,
+  newsHidden,
+  promotionHidden,
+} from '../lib/visibility.ts'
 import {
   hasErrors,
   takeBoolean,
@@ -64,6 +70,24 @@ check('слаг: после обрезки нет дефиса на конце',
 check('слаг: результат проходит ограничение БД', isValidSlug(slugify('Мы открылись')), true)
 check('слаг: пустой не проходит ограничение БД', isValidSlug(''), false)
 check('слаг: заглавные не проходят ограничение БД', isValidSlug('Abc'), false)
+
+// Слаг заведения строже слага новости: он же адрес сайта, и им можно
+// перекрыть маршрут админки. Проверки повторяют tenants_slug_format.
+check('слаг заведения: из названия', tenantSlugify('Кофейня «Флора»'), 'kofeinya-flora')
+check('слаг заведения: ведущая цифра срезается', tenantSlugify('1-я Кофейня'), 'ya-kofeinya')
+check('слаг заведения: из одних цифр ничего не выходит', tenantSlugify('2024'), '')
+check('слаг заведения: односимвольный не годится', tenantSlugify('А'), '')
+check('слаг заведения: admin занят', isValidTenantSlug('admin'), false)
+check('слаг заведения: api занят', isValidTenantSlug('api'), false)
+check('слаг заведения: обычный проходит', isValidTenantSlug('flora'), true)
+check('слаг заведения: с цифры начинаться нельзя', isValidTenantSlug('1flora'), false)
+check('слаг заведения: 63 символа — предел', isValidTenantSlug('a'.repeat(63)), true)
+check('слаг заведения: 64 символа — уже нет', isValidTenantSlug('a'.repeat(64)), false)
+check('слаг заведения: подсказка либо пуста, либо валидна',
+  ['Кофейня «Флора»', 'Барбершоп ZARYA', 'Салон 5 звёзд', '!!!', '2024', 'admin']
+    .map(tenantSlugify)
+    .every((s) => s === '' || isValidTenantSlug(s)),
+  true)
 
 // ------------------------------------------------------------ цены и даты
 check('цена: целое', nbsp(formatPrice(220)), '220 ₽')
@@ -263,6 +287,58 @@ check('тег меню', tags.menu('t1'), 'menu:t1')
 check('теги контента: все четыре', allContentTags('t1').length, 4)
 check('теги контента: без пересечений', new Set(allContentTags('t1')).size, 4)
 check('теги разных тенантов не совпадают', tags.menu('a') === tags.menu('b'), false)
+
+// ------------------------------------------------------------- видимость
+//
+// Эти проверки сторожат совпадение lib/visibility.ts с политиками публичного
+// чтения в 20260720120100_rls_policies.sql. Разъедутся — предпросмотр начнёт
+// врать: подпишет «черновик» то, что посетители уже видят, или наоборот
+// промолчит про скрытое. Тихая ошибка, руками её не заметишь.
+
+const NOW = new Date('2026-07-21T12:00:00Z')
+const BEFORE = '2026-07-20T12:00:00Z'
+const AFTER = '2026-07-22T12:00:00Z'
+
+check('меню: доступная позиция видна',
+  menuItemHidden({ is_available: true }), { hidden: false })
+check('меню: снятая с продажи скрыта',
+  menuItemHidden({ is_available: false }), { hidden: true, reason: 'unavailable' })
+
+check('акция: включённая без дат идёт',
+  promotionHidden({ is_active: true, starts_at: null, ends_at: null }, NOW), { hidden: false })
+check('акция: выключенная скрыта',
+  promotionHidden({ is_active: false, starts_at: null, ends_at: null }, NOW),
+  { hidden: true, reason: 'disabled' })
+check('акция: начало в будущем — ещё не началась',
+  promotionHidden({ is_active: true, starts_at: AFTER, ends_at: null }, NOW),
+  { hidden: true, reason: 'scheduled' })
+check('акция: конец в прошлом — закончилась',
+  promotionHidden({ is_active: true, starts_at: null, ends_at: BEFORE }, NOW),
+  { hidden: true, reason: 'expired' })
+check('акция: внутри окна дат идёт',
+  promotionHidden({ is_active: true, starts_at: BEFORE, ends_at: AFTER }, NOW), { hidden: false })
+check('акция: выключенная важнее дат',
+  promotionHidden({ is_active: false, starts_at: BEFORE, ends_at: AFTER }, NOW),
+  { hidden: true, reason: 'disabled' })
+
+check('новость: опубликованная без даты видна сразу',
+  newsHidden({ is_published: true, published_at: null }, NOW), { hidden: false })
+check('новость: черновик скрыт',
+  newsHidden({ is_published: false, published_at: BEFORE }, NOW),
+  { hidden: true, reason: 'draft' })
+check('новость: дата публикации в прошлом — видна',
+  newsHidden({ is_published: true, published_at: BEFORE }, NOW), { hidden: false })
+check('новость: дата публикации в будущем — запланирована',
+  newsHidden({ is_published: true, published_at: AFTER }, NOW),
+  { hidden: true, reason: 'scheduled' })
+check('новость: черновик с будущей датой — всё-таки черновик',
+  newsHidden({ is_published: false, published_at: AFTER }, NOW),
+  { hidden: true, reason: 'draft' })
+
+check('у каждой причины есть человеческий ярлык',
+  ['draft', 'unavailable', 'scheduled', 'expired', 'disabled']
+    .every((r) => typeof HIDDEN_LABEL[r] === 'string' && HIDDEN_LABEL[r].length > 0),
+  true)
 
 // ---------------------------------------------------------------- итог
 if (failures.length === 0) {

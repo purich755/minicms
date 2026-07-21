@@ -3,11 +3,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 
+import { IfHidden } from '@/components/public/hidden-badge'
 import { PageSkeleton } from '@/components/public/skeletons'
 import { getBasePath } from '@/lib/base-path'
 import { formatDate } from '@/lib/format'
-import { getNewsItem } from '@/lib/public-data'
+import { isPreviewFor } from '@/lib/preview'
+import { getNewsItem, readNewsItem } from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
+import { newsHidden } from '@/lib/visibility'
 
 type Params = { tenant: string; slug: string }
 
@@ -54,10 +57,13 @@ async function NewsItemContent({ params }: { params: Promise<Params> }) {
   const tenant = await resolveTenant(tenantSlug)
   if (!tenant) notFound()
 
-  // Черновик и отложенная новость сюда не приедут: их отсекает RLS-политика,
-  // так что «не опубликовано» и «не существует» снаружи неразличимы.
+  // Посетителю черновик и отложенная новость сюда не приедут: их отсекает
+  // RLS-политика, так что «не опубликовано» и «не существует» снаружи
+  // неразличимы. Владельцу в предпросмотре — приедут, и он увидит метку.
+  const preview = await isPreviewFor(tenant.id)
+
   const [item, base] = await Promise.all([
-    getNewsItem(tenant.id, slug),
+    readNewsItem(tenant.id, slug, preview),
     getBasePath(tenant.slug),
   ])
   if (!item) notFound()
@@ -73,11 +79,14 @@ async function NewsItemContent({ params }: { params: Promise<Params> }) {
       </Link>
 
       <header className="mt-8">
-        {item.published_at ? (
-          <p className="text-xs tracking-[0.14em] text-stone-500 uppercase">
-            {formatDate(item.published_at)}
-          </p>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {item.published_at ? (
+            <p className="text-xs tracking-[0.14em] text-stone-500 uppercase">
+              {formatDate(item.published_at)}
+            </p>
+          ) : null}
+          <IfHidden preview={preview} of={newsHidden(item)} />
+        </div>
         <h1 className="display mt-3 text-[clamp(2rem,6vw,3.25rem)]">{item.title}</h1>
       </header>
 
