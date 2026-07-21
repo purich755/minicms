@@ -30,11 +30,11 @@ export async function proxy(request: NextRequest) {
 }
 
 async function guardAdmin(request: NextRequest) {
-  const { response, user } = await updateSession(request)
+  const { response, userId } = await updateSession(request)
   const { pathname } = request.nextUrl
   const isLoginPage = pathname === '/admin/login'
 
-  if (!user && !isLoginPage) {
+  if (!userId && !isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin/login'
     url.search = ''
@@ -46,7 +46,7 @@ async function guardAdmin(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && isLoginPage) {
+  if (userId && isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin'
     url.search = ''

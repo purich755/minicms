@@ -4,6 +4,11 @@ import { cache } from 'react'
 
 import { createClient } from './supabase/server'
 
+export type CurrentUser = {
+  id: string
+  email: string | null
+}
+
 export type CurrentTenant = {
   id: string
   slug: string
@@ -11,70 +16,6 @@ export type CurrentTenant = {
   customDomain: string | null
   role: string
 }
-
-/**
- * Текущий пользователь или null.
- *
- * getUser(), а не getSession(): второй верит cookie на слово, первый
- * проверяет токен на сервере Supabase. Для решений о доступе годится только
- * второй вариант.
- */
-export const getCurrentUser = cache(async () => {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
-})
-
-/**
- * Тенант текущего пользователя, или null если пользователь не залогинен либо
- * его аккаунт ни к какому бизнесу не привязан.
- *
- * Пока берём первое членство: один владелец — один бизнес. Когда появятся
- * агентства с несколькими точками, здесь понадобится выбор активного тенанта
- * (например, через cookie), а не limit(1).
- *
- * Обёрнуто в cache(): за один рендер страницы функцию зовут и layout, и сама
- * страница, а это два запроса к Supabase на ровном месте. cache() схлопывает
- * их в один в пределах запроса.
- */
-export const getCurrentTenant = cache(async (): Promise<CurrentTenant | null> => {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: membership } = await supabase
-    .from('tenant_members')
-    .select('tenant_id, role')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-
-  if (!membership) return null
-
-  // Колонки перечислены явно: plan и owner_user_id грантами наружу не выданы,
-  // select('*') упрётся в permission denied.
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('id, slug, name, custom_domain')
-    .eq('id', membership.tenant_id)
-    .maybeSingle()
-
-  if (!tenant) return null
-
-  return {
-    id: tenant.id,
-    slug: tenant.slug,
-    name: tenant.name,
-    customDomain: tenant.custom_domain,
-    role: membership.role,
-  }
-})
 
 /**
  * Текст отказа для server actions.
@@ -93,3 +34,75 @@ export const getCurrentTenant = cache(async (): Promise<CurrentTenant | null> =>
  * накрыть. Эта проверка — единственная, на которую можно положиться.
  */
 export const NO_ACCESS = 'Нет доступа. Войдите заново.'
+
+/**
+ * Текущий пользователь или null.
+ *
+ * getClaims(), а не getUser(): оба честно проверяют подпись токена, но
+ * getUser ради этого ходит на сервер Supabase, а getClaims сверяет подпись
+ * локально по публичному ключу проекта. На каждый переход внутри админки это
+ * экономит около 400 мс.
+ *
+ * getSession() не годится: он читает cookie и верит ей на слово.
+ *
+ * cache() схлопывает повторные вызовы в пределах одного рендера — за него
+ * дёргают и лейаут, и страница.
+ */
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  const supabase = await createClient()
+
+  try {
+    const { data } = await supabase.auth.getClaims()
+    const claims = data?.claims
+    if (!claims?.sub) return null
+
+    return {
+      id: claims.sub,
+      email: typeof claims.email === 'string' ? claims.email : null,
+    }
+  } catch {
+    // Supabase недоступен — считаем, что пользователя нет. Падаем закрыто.
+    return null
+  }
+})
+
+/**
+ * Тенант текущего пользователя, или null если пользователь не залогинен либо
+ * его аккаунт ни к какому бизнесу не привязан.
+ *
+ * Одним запросом со связанной таблицей, а не двумя подряд: раньше сначала
+ * читалось членство, потом по его tenant_id — сам тенант, и это был лишний
+ * поход в базу на каждый рендер страницы админки.
+ *
+ * Колонки тенанта перечислены явно: plan и owner_user_id грантами наружу не
+ * выданы, и select('*') упрётся в permission denied.
+ *
+ * Пока берём первое членство: один владелец — один бизнес. Когда появятся
+ * агентства с несколькими точками, здесь понадобится выбор активного тенанта
+ * (например, через cookie), а не limit(1).
+ */
+export const getCurrentTenant = cache(async (): Promise<CurrentTenant | null> => {
+  const user = await getCurrentUser()
+  if (!user) return null
+
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('tenant_members')
+    .select('role, tenant:tenants(id, slug, name, custom_domain)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  const tenant = data?.tenant
+  if (!tenant) return null
+
+  return {
+    id: tenant.id,
+    slug: tenant.slug,
+    name: tenant.name,
+    customDomain: tenant.custom_domain,
+    role: data.role,
+  }
+})

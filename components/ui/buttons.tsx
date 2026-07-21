@@ -5,12 +5,15 @@ import type { ComponentProps, ReactNode } from 'react'
 import { useFormStatus } from 'react-dom'
 
 const BASE =
-  'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium ' +
-  'transition disabled:cursor-not-allowed disabled:opacity-60'
+  'inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-medium ' +
+  'transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ' +
+  // Нажатие должно ощущаться: без этого кнопка кажется неотзывчивой, даже
+  // когда работает быстро.
+  'active:translate-y-0 disabled:translate-y-0'
 
 const VARIANTS = {
-  primary: 'bg-[var(--accent)] text-white hover:opacity-90',
-  secondary: 'border border-[var(--border)] bg-white hover:bg-[var(--surface)]',
+  primary: 'bg-[var(--accent)] text-white hover:-translate-y-0.5',
+  secondary: 'border border-[var(--border)] bg-white hover:border-[var(--foreground)]',
   danger: 'border border-[var(--danger)] text-[var(--danger)] hover:bg-[var(--danger)]/8',
 } as const
 

@@ -66,15 +66,18 @@ async function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--surface)] md:flex-row">
-      <aside className="flex shrink-0 flex-col gap-5 border-b border-[var(--border)] bg-[var(--surface)] p-4 md:w-60 md:border-r md:border-b-0 md:p-5">
+      <aside className="flex shrink-0 flex-col gap-6 border-b border-[var(--border)] p-4 md:sticky md:top-0 md:h-screen md:w-64 md:border-r md:border-b-0 md:p-6">
         <div className="min-w-0">
-          <p className="truncate font-semibold">{tenant.name}</p>
+          <p className="truncate leading-tight font-semibold">{tenant.name}</p>
           <Link
             href={`/${tenant.slug}`}
             target="_blank"
-            className="text-xs text-[var(--muted)] underline-offset-2 hover:underline"
+            className="group mt-1 inline-flex items-center gap-1 text-xs text-[var(--muted)] transition-colors hover:text-[var(--foreground)]"
           >
-            /{tenant.slug} — открыть сайт
+            Открыть сайт
+            <span className="transition-transform duration-200 group-hover:translate-x-0.5">
+              ↗
+            </span>
           </Link>
         </div>
 
@@ -83,14 +86,16 @@ async function AdminShell({ children }: { children: React.ReactNode }) {
         <form action={signOut} className="md:mt-auto">
           <button
             type="submit"
-            className="text-sm text-[var(--muted)] transition hover:text-[var(--foreground)]"
+            className="rounded-lg px-3 py-2 text-sm text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--foreground)]"
           >
             Выйти
           </button>
         </form>
       </aside>
 
-      <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
+      <main className="min-w-0 flex-1 p-4 md:p-10">
+        <div className="mx-auto max-w-3xl">{children}</div>
+      </main>
     </div>
   )
 }

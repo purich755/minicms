@@ -1,14 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  /* --- Админка: нейтральная, рабочая --- */
+  /* --- Админка: рабочая, но из того же тёплого семейства, что и сайты.
+         Раньше здесь были холодные сине-серые, и кабинет выглядел деталью
+         от другого продукта. --- */
   --background: #ffffff;
-  --foreground: #171717;
-  --surface: #f6f7f9;
-  --border: #e4e7ec;
-  --muted: #6b7280;
-  --accent: #1f6feb;
-  --danger: #b42318;
+  --foreground: #1c1917;
+  --surface: #f7f5f2;
+  --border: #e7e2dc;
+  --muted: #78716c;
+  /* Основное действие — тёмный нейтральный, как на витрине. Цветом отмечаем
+     только состояния, иначе интерфейс пестрит. */
+  --accent: #1c1917;
+  --accent-soft: #f0ece7;
+  --danger: #a4362a;
+  --ok: #3f6212;
 
   /* --- Публичные сайты: тёплая бумажная база ---
      Чистый #fff при коричневом фирменном цвете выглядит стерильно.
@@ -29,7 +35,9 @@
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
+  --color-ok: var(--ok);
   --color-paper: var(--paper);
   --color-hairline: var(--hairline);
   --color-brand: var(--brand);
@@ -66,6 +74,34 @@ body {
 }
 .skip-link:focus {
   top: 0.75rem;
+}
+
+/* Точка «идёт переход» у пункта меню админки.
+   Появляется не сразу: задержка в 150 мс отсекает быстрые переходы, иначе
+   при каждом клике что-то мигало бы впустую. */
+.nav-pending {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin-top: -0.175rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0;
+  animation: nav-pending-in 200ms ease 150ms forwards,
+    nav-pending-pulse 1s ease-in-out 150ms infinite;
+}
+
+@keyframes nav-pending-in {
+  to {
+    opacity: 0.4;
+  }
+}
+@keyframes nav-pending-pulse {
+  50% {
+    opacity: 0.12;
+  }
 }
 
 /* Тонкая зернистость поверх страницы: убирает цифровую плоскость, но не

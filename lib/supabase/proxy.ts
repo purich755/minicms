@@ -46,20 +46,24 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
-  // Именно getUser(), а не getSession(): getSession читает cookie и верит ей
-  // на слово, а getUser проверяет токен на сервере Supabase. Для решения
-  // «пускать или нет» верить cookie нельзя.
+  // getClaims(), а не getUser(): оба проверяют подпись токена по-настоящему,
+  // но getUser ходит за этим на сервер Supabase, а getClaims сверяет подпись
+  // локально по публичному ключу проекта. На каждый переход внутри админки
+  // это экономило ~400 мс сетевого похода во Франкфурт.
+  //
+  // getSession() здесь не годится в принципе: он читает cookie и верит ей на
+  // слово, а cookie подделывается.
   //
   // Если Supabase недоступен или ключи не заданы, считаем, что пользователя
   // нет: человек уедет на страницу входа. Падать закрыто здесь правильнее,
   // чем отдавать 500 на всю админку — и тем более чем пускать внутрь.
-  let user = null
+  let userId: string | null = null
   try {
-    const result = await supabase.auth.getUser()
-    user = result.data.user
+    const { data } = await supabase.auth.getClaims()
+    userId = data?.claims?.sub ?? null
   } catch {
-    user = null
+    userId = null
   }
 
-  return { response, user }
+  return { response, userId }
 }

@@ -62,7 +62,17 @@ export type Database = {
         Update: {
           role?: string
         }
-        Relationships: []
+        // Связь нужна не для красоты: без неё supabase-js не может вывести тип
+        // вложенной выборки tenant:tenants(...) в lib/auth.ts.
+        Relationships: [
+          {
+            foreignKeyName: 'tenant_members_tenant_id_fkey'
+            columns: ['tenant_id']
+            isOneToOne: false
+            referencedRelation: 'tenants'
+            referencedColumns: ['id']
+          },
+        ]
       }
       site_settings: {
         Row: {
