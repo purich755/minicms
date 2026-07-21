@@ -56,6 +56,15 @@ export function SettingsForm({
           label="Логотип"
         />
 
+        <ImageUpload
+          name="hero_image_url"
+          tenantId={tenantId}
+          folder="site"
+          initialUrl={settings?.hero_image_url}
+          label="Фото на главную"
+          hint="Первое, что видит гость. Лучше горизонтальное и светлое — поверх него идёт текст."
+        />
+
         <Field
           label="Фирменный цвет"
           htmlFor="primary_color"

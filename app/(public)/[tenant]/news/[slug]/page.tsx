@@ -8,7 +8,7 @@ import { PageSkeleton } from '@/components/public/skeletons'
 import { getBasePath } from '@/lib/base-path'
 import { formatDate } from '@/lib/format'
 import { isPreviewFor } from '@/lib/preview'
-import { getNewsItem, readNewsItem } from '@/lib/public-data'
+import { readNewsItem } from '@/lib/public-data'
 import { resolveTenant } from '@/lib/tenant'
 import { newsHidden } from '@/lib/visibility'
 
@@ -24,7 +24,10 @@ export async function generateMetadata({
   const tenant = await resolveTenant(tenantSlug)
   if (!tenant) return { title: 'Страница не найдена' }
 
-  const item = await getNewsItem(tenant.id, slug)
+  // Тот же флаг, что и у страницы. Без него владелец, открывший черновик в
+  // предпросмотре, видел бы статью и «Страница не найдена» в заголовке
+  // вкладки одновременно.
+  const item = await readNewsItem(tenant.id, slug, await isPreviewFor(tenant.id))
   if (!item) return { title: 'Страница не найдена' }
 
   return {

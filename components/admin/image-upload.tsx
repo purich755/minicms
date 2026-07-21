@@ -28,12 +28,14 @@ export function ImageUpload({
   folder,
   initialUrl,
   label = 'Изображение',
+  hint,
 }: {
   name: string
   tenantId: string
   folder: MediaFolder
   initialUrl?: string | null
   label?: string
+  hint?: string
 }) {
   const [url, setUrl] = useState(initialUrl ?? '')
   const [error, setError] = useState('')
@@ -120,7 +122,9 @@ export function ImageUpload({
         </p>
       ) : null}
       {!error && !busy ? (
-        <p className="text-xs text-[var(--muted)]">JPG, PNG, WebP или AVIF, до 5 МБ.</p>
+        <p className="text-xs text-[var(--muted)]">
+          {hint ? `${hint} ` : ''}JPG, PNG, WebP или AVIF, до 5 МБ.
+        </p>
       ) : null}
     </div>
   )

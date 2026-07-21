@@ -155,6 +155,22 @@ async function HomeContent({ params }: { params: Params }) {
         ) : null}
       </section>
 
+      {/* Фотография идёт ПОСЛЕ заголовка, а не под ним фоном. Текст поверх
+          произвольного снимка читается непредсказуемо: у одного клиента
+          светлое небо, у другого тёмный интерьер, и контраст не угадать.
+          Отдельной полосой — всегда аккуратно. */}
+      {settings?.hero_image_url ? (
+        <section className="mx-auto max-w-6xl px-5 pb-20 sm:px-8 sm:pb-28">
+          {/* eslint-disable-next-line @next/next/no-img-element -- снимок
+              произвольного размера из Storage */}
+          <img
+            src={settings.hero_image_url}
+            alt={tenant.name}
+            className="aspect-[16/9] w-full rounded-3xl object-cover sm:aspect-[21/9]"
+          />
+        </section>
+      ) : null}
+
       {leadPromo ? (
         <section className="mx-auto max-w-5xl px-5 py-14 sm:px-8">
           <SectionTitle>Сейчас действует</SectionTitle>

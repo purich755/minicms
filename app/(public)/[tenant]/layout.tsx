@@ -23,6 +23,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return {
     title: { default: tenant.name, template: `%s — ${tenant.name}` },
     description: settings?.about ?? undefined,
+    // Значок вкладки — логотип заведения, а не логотип сервиса. Гость,
+    // державший сайт открытым во вкладке, должен узнавать его по иконке.
+    icons: settings?.logo_url ? { icon: settings.logo_url } : undefined,
     openGraph: {
       title: tenant.name,
       description: settings?.about ?? undefined,

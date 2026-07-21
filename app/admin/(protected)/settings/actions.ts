@@ -36,6 +36,9 @@ export async function saveSettings(_prev: FormState, formData: FormData): Promis
     about: takeText(formData, 'about', errors, { label: 'О нас', max: 2000 }) || null,
     primary_color: takeHexColor(formData, 'primary_color', errors, '#111827'),
     logo_url: takeText(formData, 'logo_url', errors, { label: 'Логотип', max: 500 }) || null,
+    hero_image_url:
+      takeText(formData, 'hero_image_url', errors, { label: 'Фото на главную', max: 500 }) ||
+      null,
     yandex_map_url: takeUrl(formData, 'yandex_map_url', errors, { label: 'Яндекс.Карты' }),
     socials: {
       telegram: takeUrl(formData, 'telegram', errors, { label: 'Telegram' }) ?? '',
