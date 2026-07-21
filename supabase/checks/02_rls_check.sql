@@ -128,6 +128,88 @@ end;
 $$;
 
 -- -----------------------------------------------------------------------------
+-- Сценарий 3: выключенный сайт (неоплата)
+--
+-- Выключенного тенанта аноним не должен находить вообще — иначе публичная
+-- страница отрисуется и сайт продолжит работать, хотя за него не платят.
+-- А владелец обязан по-прежнему видеть свой тенант: иначе он не заберёт
+-- собственные данные и не поймёт, что произошло.
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  v_user uuid;
+  c_anon_all int; c_anon_zarya int; c_owner int;
+begin
+  update public.tenants set is_active = false where slug = 'zarya';
+
+  execute 'set local role anon';
+  select count(*) into c_anon_all   from public.tenants;
+  select count(*) into c_anon_zarya from public.tenants where slug = 'zarya';
+  execute 'reset role';
+
+  select id into v_user from auth.users where email = 'zarya@mini-cms.test';
+  execute format(
+    'set local request.jwt.claims = %L',
+    json_build_object('sub', v_user, 'role', 'authenticated')::text
+  );
+  execute 'set local role authenticated';
+  select count(*) into c_owner from public.tenants where slug = 'zarya';
+  execute 'reset role';
+
+  -- Возвращаем как было: следующие сценарии рассчитывают на два живых сайта.
+  update public.tenants set is_active = true where slug = 'zarya';
+
+  insert into rls_check values
+    (18, 'Выключенный сайт', 'Аноним видит выключенный',              '0', c_anon_zarya::text),
+    (19, 'Выключенный сайт', 'Аноним видит остальные',                '1', c_anon_all::text),
+    (20, 'Выключенный сайт', 'Владелец видит свой выключенный',       '1', c_owner::text);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- Сценарий 4: service_role — под ним работают скрипты обслуживания
+--
+-- Эта роль обязана видеть всё и у всех: на ней держатся резервные копии.
+-- Проверка появилась после того, как первая же попытка снять копию упала с
+-- «permission denied for table tenants»: гранты выдавались поимённо, и
+-- service_role в списке не оказалось.
+--
+-- Поломка тут особенно неприятная — тихая. Приложение продолжает работать,
+-- просто копии перестают сниматься, и выясняется это в тот день, когда копия
+-- понадобилась.
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  c_tenants int; c_news int; c_items int;
+  v_write text;
+begin
+  execute 'set local role service_role';
+
+  select count(*) into c_tenants from public.tenants;
+  select count(*) into c_news    from public.news;
+  select count(*) into c_items   from public.menu_items;
+
+  -- Восстановление обязано уметь писать, иначе копия односторонняя.
+  begin
+    update public.news set title = title where false;
+    v_write := 'разрешено';
+  exception when others then
+    v_write := 'отклонено';
+  end;
+
+  execute 'reset role';
+
+  insert into rls_check values
+    -- Числа больше, чем у анонима (12 и 14): аноним не видит черновик и
+    -- снятую с продажи позицию, а копия обязана забрать и их.
+    (21, 'service_role (бэкапы)', 'Тенантов видно (все, а не только свои)', '2', c_tenants::text),
+    (22, 'service_role (бэкапы)', 'Новостей видно (включая черновик)',      '3', c_news::text),
+    (23, 'service_role (бэкапы)', 'Позиций меню видно (включая снятую)',    '3', c_items::text),
+    (24, 'service_role (бэкапы)', 'UPDATE для восстановления',      'разрешено', v_write);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
 -- Итог
 -- -----------------------------------------------------------------------------
 select

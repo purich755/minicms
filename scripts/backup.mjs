@@ -21,7 +21,17 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { BUCKET, TABLES, bad, fetchAll, headers, listMedia, ok, readEnv, warn } from './lib/supabase-admin.mjs'
+import {
+  BUCKET,
+  TABLES,
+  bad,
+  fetchAll,
+  headers,
+  listMedia,
+  ok,
+  readEnv,
+  warn,
+} from './lib/supabase-admin.mjs'
 
 const { base, key } = readEnv()
 
@@ -32,106 +42,136 @@ function stamp() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`
 }
 
-const dir = join('backups', stamp())
+/**
+ * Всё тело — функция, а не верхний уровень модуля, ради одной вещи: с неудачи
+ * надо уходить через return, а не process.exit(). На Windows process.exit()
+ * роняет libuv, если остались открытые сетевые дескрипторы, и поверх понятной
+ * ошибки печатается «Assertion failed» — выглядит как крах скрипта, хотя
+ * ошибка уже обработана.
+ */
+async function main() {
+  const dir = join('backups', stamp())
 
-console.log(`\n=== Резервная копия → ${dir} ===\n`)
+  console.log(`\n=== Резервная копия → ${dir} ===\n`)
 
-await mkdir(join(dir, 'media'), { recursive: true })
+  // --- Таблицы ---------------------------------------------------------------
+  // Читаем ДО создания папки: иначе после сбоя на диске остаётся пустой
+  // каталог с датой, неотличимый на вид от настоящей копии.
 
-// --- Таблицы -----------------------------------------------------------------
+  const tables = {}
+  let rowCount = 0
 
-const tables = {}
-let rowCount = 0
+  for (const table of TABLES) {
+    try {
+      const rows = await fetchAll(base, key, table)
+      tables[table] = rows
+      rowCount += rows.length
+      ok(`${table}: ${rows.length}`)
+    } catch (error) {
+      bad(`${table}: ${error.message}`)
 
-for (const table of TABLES) {
+      // Права у service_role легко забрать случайно: миграция 20260720120000
+      // выдавала гранты поимённо, и на первой же копии это вылезло.
+      if (error.message.includes('permission denied')) {
+        console.log(
+          '\n  У роли service_role нет прав на таблицу. Применить в Supabase → SQL Editor:\n' +
+            '  supabase/migrations/20260721090000_service_role_grants.sql\n',
+        )
+      }
+
+      console.log('  Ничего не сохранено: неполной копии быть не должно.\n')
+      process.exitCode = 1
+      return
+    }
+  }
+
+  // --- Список пользователей (только для справки) ------------------------------
+
+  let users = []
   try {
-    const rows = await fetchAll(base, key, table)
-    tables[table] = rows
-    rowCount += rows.length
-    ok(`${table}: ${rows.length}`)
+    const res = await fetch(`${base}/auth/v1/admin/users?per_page=1000`, { headers: headers(key) })
+    if (res.ok) {
+      const data = await res.json()
+      users = (data.users ?? []).map((u) => ({ id: u.id, email: u.email }))
+      ok(`учётных записей: ${users.length} (только почты, пароли не выгружаются)`)
+    } else {
+      warn(`список пользователей не прочитан: ${res.status}. На данные это не влияет.`)
+    }
   } catch (error) {
-    bad(`${table}: ${error.message}`)
-    console.log('\n  Копия неполная, файл не сохранён.\n')
-    process.exit(1)
+    warn(`список пользователей не прочитан: ${error.message}`)
   }
-}
 
-// --- Список пользователей (только для справки) -------------------------------
+  // --- Картинки ---------------------------------------------------------------
 
-let users = []
-try {
-  const res = await fetch(`${base}/auth/v1/admin/users?per_page=1000`, { headers: headers(key) })
-  if (res.ok) {
-    const data = await res.json()
-    users = (data.users ?? []).map((u) => ({ id: u.id, email: u.email }))
-    ok(`учётных записей: ${users.length} (только почты, пароли не выгружаются)`)
-  } else {
-    warn(`список пользователей не прочитан: ${res.status}. На данные это не влияет.`)
-  }
-} catch (error) {
-  warn(`список пользователей не прочитан: ${error.message}`)
-}
+  await mkdir(join(dir, 'media'), { recursive: true })
 
-// --- Картинки ----------------------------------------------------------------
+  let mediaCount = 0
+  let mediaBytes = 0
 
-let mediaCount = 0
-let mediaBytes = 0
+  try {
+    const paths = await listMedia(base, key)
 
-try {
-  const paths = await listMedia(base, key)
+    for (const path of paths) {
+      const res = await fetch(`${base}/storage/v1/object/${BUCKET}/${path}`, {
+        headers: headers(key),
+      })
+      if (!res.ok) {
+        warn(`картинка не скачалась: ${path} (${res.status})`)
+        continue
+      }
 
-  for (const path of paths) {
-    const res = await fetch(`${base}/storage/v1/object/${BUCKET}/${path}`, { headers: headers(key) })
-    if (!res.ok) {
-      warn(`картинка не скачалась: ${path} (${res.status})`)
-      continue
+      const bytes = Buffer.from(await res.arrayBuffer())
+      const target = join(dir, 'media', path)
+
+      await mkdir(join(target, '..'), { recursive: true })
+      await writeFile(target, bytes)
+
+      mediaCount++
+      mediaBytes += bytes.length
     }
 
-    const bytes = Buffer.from(await res.arrayBuffer())
-    const target = join(dir, 'media', path)
-
-    await mkdir(join(target, '..'), { recursive: true })
-    await writeFile(target, bytes)
-
-    mediaCount++
-    mediaBytes += bytes.length
+    ok(`картинок: ${mediaCount} (${(mediaBytes / 1024 / 1024).toFixed(1)} МБ)`)
+  } catch (error) {
+    warn(`картинки не скопированы: ${error.message}. Строки сохранены.`)
   }
 
-  ok(`картинок: ${mediaCount} (${(mediaBytes / 1024 / 1024).toFixed(1)} МБ)`)
-} catch (error) {
-  warn(`картинки не скопированы: ${error.message}. Строки в data.json уже сохранены.`)
+  // --- Файлы ------------------------------------------------------------------
+
+  await writeFile(
+    join(dir, 'data.json'),
+    JSON.stringify(
+      { version: 1, createdAt: new Date().toISOString(), project: base, users, tables },
+      null,
+      2,
+    ),
+    'utf8',
+  )
+
+  await writeFile(
+    join(dir, 'README.txt'),
+    [
+      'Резервная копия mini-cms',
+      `Снята: ${new Date().toLocaleString('ru-RU')}`,
+      `Проект: ${base}`,
+      '',
+      `Строк: ${rowCount}. Картинок: ${mediaCount}.`,
+      '',
+      'Что внутри:',
+      '  data.json  — содержимое всех сайтов: тенанты, меню, акции, новости, настройки',
+      '  media/     — картинки из Storage, путь как в бакете',
+      '',
+      'Как вернуть:',
+      `  npm run restore -- ${dir}`,
+      '',
+      'Пароли пользователей сюда не попадают — их нельзя выгрузить.',
+      'Если потерян весь проект Supabase, владельцев придётся завести заново',
+      'через npm run tenant:create, а потом восстановить содержимое.',
+    ].join('\n'),
+    'utf8',
+  )
+
+  console.log(`\nГотово. Строк: ${rowCount}, картинок: ${mediaCount}.`)
+  console.log(`Вернуть: npm run restore -- ${dir}\n`)
 }
 
-// --- Файлы -------------------------------------------------------------------
-
-await writeFile(
-  join(dir, 'data.json'),
-  JSON.stringify({ version: 1, createdAt: new Date().toISOString(), project: base, users, tables }, null, 2),
-  'utf8',
-)
-
-await writeFile(
-  join(dir, 'README.txt'),
-  [
-    'Резервная копия mini-cms',
-    `Снята: ${new Date().toLocaleString('ru-RU')}`,
-    `Проект: ${base}`,
-    '',
-    `Строк: ${rowCount}. Картинок: ${mediaCount}.`,
-    '',
-    'Что внутри:',
-    '  data.json  — содержимое всех сайтов: тенанты, меню, акции, новости, настройки',
-    '  media/     — картинки из Storage, путь как в бакете',
-    '',
-    'Как вернуть:',
-    `  npm run restore -- ${dir}`,
-    '',
-    'Пароли пользователей сюда не попадают — их нельзя выгрузить.',
-    'Если потерян весь проект Supabase, владельцев придётся завести заново',
-    'через npm run tenant:create, а потом восстановить содержимое.',
-  ].join('\n'),
-  'utf8',
-)
-
-console.log(`\nГотово. Строк: ${rowCount}, картинок: ${mediaCount}.`)
-console.log(`Вернуть: npm run restore -- ${dir}\n`)
+await main()
