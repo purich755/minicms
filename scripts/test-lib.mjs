@@ -9,6 +9,7 @@
 
 import { isAuthCallback, isPublicAdminPage, requiresSession } from '../lib/admin-paths.ts'
 import { allContentTags, tags } from '../lib/cache-tags.ts'
+import { COOLDOWN_MS, createFailFastFetch } from '../lib/fail-fast-fetch.ts'
 import { formatDate, formatDateTime, formatPrice, plural, toDateTimeLocal } from '../lib/format.ts'
 import { isLocalHost, isPlatformHost, normalizeHost, subdomainSlug } from '../lib/host.ts'
 import { isValidSlug, isValidTenantSlug, slugify, tenantSlugify } from '../lib/slug.ts'
@@ -367,6 +368,42 @@ check('у каждой причины есть человеческий ярлы
   ['draft', 'unavailable', 'scheduled', 'expired', 'disabled']
     .every((r) => typeof HIDDEN_LABEL[r] === 'string' && HIDDEN_LABEL[r].length > 0),
   true)
+
+// ------------------------------------------------ быстрый отказ при простое
+//
+// Нашлось на настоящем простое Supabase: гость ждал 29 секунд, прежде чем
+// увидеть «временно недоступен». Эти проверки сторожат, что сбой сети не
+// превращается в исключение (на него postgrest-js включает повторы с
+// паузами) и что после сбоя база полминуты не опрашивается вовсе.
+{
+  let clock = 1_000_000
+  let calls = 0
+  const broken = async () => {
+    calls++
+    throw new TypeError('fetch failed')
+  }
+  const ff = createFailFastFetch(5000, broken, () => clock)
+
+  const first = await ff('https://db.example/rest/v1/tenants')
+  check('простой: сбой сети отдаётся ответом, а не исключением', first.status, 504)
+  check('простой: в сеть сходили один раз', calls, 1)
+
+  const second = await ff('https://db.example/rest/v1/menu_items')
+  check('простой: второй запрос отвечает сразу', second.status, 504)
+  check('простой: второй запрос в сеть не ходил', calls, 1)
+  check('простой: ждать ещё полминуты', ff.cooldownLeft(), COOLDOWN_MS)
+
+  clock += COOLDOWN_MS + 1
+  await ff('https://db.example/rest/v1/news')
+  check('простой: после паузы база снова опрашивается', calls, 2)
+}
+{
+  const ok = async () => new Response('[]', { status: 200 })
+  const ff = createFailFastFetch(5000, ok)
+  const res = await ff('https://db.example/rest/v1/tenants')
+  check('исправная база: ответ проходит как есть', res.status, 200)
+  check('исправная база: паузы нет', ff.cooldownLeft(), 0)
+}
 
 // ---------------------------------------------------------------- итог
 if (failures.length === 0) {

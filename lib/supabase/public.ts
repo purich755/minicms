@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
+import { createFailFastFetch } from '@/lib/fail-fast-fetch'
 import type { Database } from '@/lib/types'
 
 import { supabaseAnonKey, supabaseUrl } from './env'
@@ -24,6 +25,16 @@ import { supabaseAnonKey, supabaseUrl } from './env'
 /** Сколько ждать ответа базы, прежде чем сдаться. */
 const TIMEOUT_MS = 5000
 
+/**
+ * Один на процесс, а не на каждый клиент: в нём живёт память о том, что база
+ * недавно не отвечала. Создавай его заново на каждый запрос — и каждый гость
+ * снова ждал бы таймаут по каждому запросу страницы. Подробности в
+ * lib/fail-fast-fetch.ts.
+ *
+ * Сессии в нём нет и быть не может — общий fetch здесь безопасен.
+ */
+const publicFetch = createFailFastFetch(TIMEOUT_MS)
+
 export function createPublicClient() {
   return createSupabaseClient<Database>(supabaseUrl(), supabaseAnonKey(), {
     auth: {
@@ -31,12 +42,6 @@ export function createPublicClient() {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
-    global: {
-      // Без таймаута недоступная база означает не ошибку, а бесконечное
-      // ожидание: supabase-js молча ретраит, и посетитель смотрит на пустую
-      // вкладку десятки секунд. Лучше быстро отдать ошибку.
-      fetch: (input, init) =>
-        fetch(input, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) }),
-    },
+    global: { fetch: publicFetch },
   })
 }

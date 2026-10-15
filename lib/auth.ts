@@ -2,6 +2,7 @@ import 'server-only'
 
 import { cache } from 'react'
 
+import { DatabaseUnavailable } from './db-errors'
 import { createClient } from './supabase/server'
 
 export type CurrentUser = {
@@ -97,17 +98,16 @@ export const getCurrentTenant = cache(async (): Promise<CurrentTenant | null> =>
     .limit(1)
     .maybeSingle()
 
-  // «Членства нет» и «запрос не выполнился» снаружи выглядят одинаково —
-  // человек видит «аккаунт не привязан к заведению». Для второго случая это
-  // сообщение уводит в противоположную сторону, поэтому настоящую причину
-  // пишем в лог сервера.
+  // «Членства нет» и «запрос не выполнился» — разные вещи, и путать их
+  // нельзя. Раньше обе давали null, и при сбое базы владелец видел «аккаунт
+  // не привязан к заведению» — сообщение, которое уводит в противоположную
+  // сторону. Теперь сбой — это исключение: его ловит app/admin/error.tsx и
+  // пишет «сервис временно недоступен».
   //
-  // Самый вероятный источник — выкатили код раньше миграции: запрос просит
-  // колонку, которой в базе ещё нет. Проверять заранее: npm run check:supabase
-  if (error) {
-    console.error('[auth] не прочитать тенанта пользователя:', error.message)
-    return null
-  }
+  // Частые причины: проект Supabase на паузе (бесплатный тариф усыпляет его
+  // после недели без запросов) или код выкатили раньше миграции и запрос
+  // просит несуществующую колонку. Проверка: npm run check:supabase
+  if (error) throw new DatabaseUnavailable('tenant_members', error.message)
 
   const tenant = data?.tenant
   if (!tenant) return null

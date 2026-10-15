@@ -5,6 +5,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { cache } from 'react'
 
 import { tags } from './cache-tags'
+import { DatabaseUnavailable } from './db-errors'
 import { createClient } from './supabase/server'
 import { createPublicClient } from './supabase/public'
 import type { Database, Row } from './types'
@@ -67,19 +68,20 @@ export async function getSiteSettings(tenantId: string): Promise<Row<'site_setti
   cacheLife('hours')
 
   const supabase = createPublicClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('site_settings')
     .select('*')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
+  if (error) throw new DatabaseUnavailable('site_settings', error.message)
   return data
 }
 
 // --- меню --------------------------------------------------------------------
 
 async function queryMenu(supabase: Client, tenantId: string): Promise<Menu> {
-  const [{ data: categories }, { data: items }] = await Promise.all([
+  const [cats, menuItems] = await Promise.all([
     supabase
       .from('menu_categories')
       .select('id, name')
@@ -94,7 +96,13 @@ async function queryMenu(supabase: Client, tenantId: string): Promise<Menu> {
       .order('name'),
   ])
 
-  return { categories: categories ?? [], items: items ?? [] }
+  // Ошибку НЕ превращаем в пустое меню: пустой ответ лёг бы в кеш на час, и
+  // сайт показывал бы «Меню скоро появится» долго после того, как база
+  // поднялась. Исключение в кеш не попадает.
+  if (cats.error) throw new DatabaseUnavailable('menu_categories', cats.error.message)
+  if (menuItems.error) throw new DatabaseUnavailable('menu_items', menuItems.error.message)
+
+  return { categories: cats.data ?? [], items: menuItems.data ?? [] }
 }
 
 export async function getMenu(tenantId: string): Promise<Menu> {
@@ -122,12 +130,13 @@ export async function readMenu(tenantId: string, preview: boolean): Promise<Menu
 // --- акции -------------------------------------------------------------------
 
 async function queryPromotions(supabase: Client, tenantId: string): Promise<Promotion[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('promotions')
     .select(PROMOTION_COLUMNS)
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
 
+  if (error) throw new DatabaseUnavailable('promotions', error.message)
   return data ?? []
 }
 
@@ -168,7 +177,8 @@ export async function getNewsList(tenantId: string, limit?: number): Promise<New
 
   if (limit) query = query.limit(limit)
 
-  const { data } = await query
+  const { data, error } = await query
+  if (error) throw new DatabaseUnavailable('news', error.message)
   return data ?? []
 }
 
@@ -190,7 +200,8 @@ export const getNewsListDraft = cache(async (
 
   if (limit) query = query.limit(limit)
 
-  const { data } = await query
+  const { data, error } = await query
+  if (error) throw new DatabaseUnavailable('news', error.message)
   return data ?? []
 })
 
@@ -207,13 +218,14 @@ async function queryNewsItem(
   tenantId: string,
   slug: string,
 ): Promise<Row<'news'> | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('news')
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('slug', slug)
     .maybeSingle()
 
+  if (error) throw new DatabaseUnavailable('news', error.message)
   return data
 }
 

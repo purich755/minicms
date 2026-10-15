@@ -3,6 +3,7 @@ import 'server-only'
 import { cacheLife, cacheTag } from 'next/cache'
 
 import { tags } from './cache-tags'
+import { DatabaseUnavailable } from './db-errors'
 import { createPublicClient } from './supabase/public'
 
 export type PublicTenant = {
@@ -33,12 +34,13 @@ export async function getTenantBySlug(slug: string): Promise<PublicTenant | null
   cacheLife('hours')
 
   const supabase = createPublicClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('tenants')
     .select(COLUMNS)
     .eq('slug', slug)
     .maybeSingle()
 
+  if (error) throw new DatabaseUnavailable('tenants', error.message)
   if (!data) return null
 
   return {
@@ -73,12 +75,13 @@ export async function getTenantByDomain(domain: string): Promise<PublicTenant | 
   cacheLife('hours')
 
   const supabase = createPublicClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('tenants')
     .select(COLUMNS)
     .eq('custom_domain', domain)
     .maybeSingle()
 
+  if (error) throw new DatabaseUnavailable('tenants', error.message)
   if (!data) return null
 
   return {
